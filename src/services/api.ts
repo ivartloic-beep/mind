@@ -38,6 +38,9 @@ export const deleteTask = (id: string) => invoke<void>("delete_task", { id });
 /** Capture → Task directe. */
 export const createTask = (title: string, projectId?: string | null) =>
   invoke<Task>("create_task", { title, projectId: projectId ?? null });
+/** Coche / décoche immédiate. */
+export const setTaskDone = (id: string, done: boolean) =>
+  invoke<Task>("set_task_done", { id, done });
 
 // Notes
 export const listNotes = (filter?: NoteFilter) =>

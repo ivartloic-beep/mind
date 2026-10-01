@@ -38,6 +38,7 @@ pub fn run() {
             commands::upsert_task,
             commands::delete_task,
             commands::create_task,
+            commands::set_task_done,
             commands::list_notes,
             commands::get_note,
             commands::upsert_note,

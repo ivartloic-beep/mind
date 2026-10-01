@@ -58,9 +58,14 @@ impl LocalStorage {
                   id TEXT PRIMARY KEY NOT NULL,
                   title TEXT NOT NULL,
                   done INTEGER NOT NULL DEFAULT 0,
+                  status TEXT NOT NULL DEFAULT 'active',
                   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
                   created_at TEXT NOT NULL,
-                  updated_at TEXT NOT NULL
+                  updated_at TEXT NOT NULL,
+                  due_date TEXT,
+                  reminder TEXT,
+                  priority TEXT,
+                  notes TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS notes (
@@ -96,9 +101,50 @@ impl LocalStorage {
                 CREATE INDEX IF NOT EXISTS idx_postits_note ON postits(note_id);
                 ",
             )?;
+            migrate_tasks_columns(conn)?;
             Ok(())
         })
     }
+}
+
+fn table_columns(conn: &Connection, table: &str) -> StorageResult<Vec<String>> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    let mut cols = Vec::new();
+    for col in rows {
+        cols.push(col?);
+    }
+    Ok(cols)
+}
+
+fn ensure_column(conn: &Connection, table: &str, column: &str, ddl: &str) -> StorageResult<()> {
+    let cols = table_columns(conn, table)?;
+    if !cols.iter().any(|c| c == column) {
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {ddl}"), [])?;
+    }
+    Ok(())
+}
+
+fn migrate_tasks_columns(conn: &Connection) -> StorageResult<()> {
+    ensure_column(conn, "tasks", "status", "status TEXT NOT NULL DEFAULT 'active'")?;
+    ensure_column(conn, "tasks", "due_date", "due_date TEXT")?;
+    ensure_column(conn, "tasks", "reminder", "reminder TEXT")?;
+    ensure_column(conn, "tasks", "priority", "priority TEXT")?;
+    ensure_column(conn, "tasks", "notes", "notes TEXT")?;
+    // Bases étape 2–4 : synchroniser status depuis l'ancien booléen `done`.
+    conn.execute(
+        "UPDATE tasks SET status = 'done' WHERE done = 1 AND status != 'done'",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE tasks SET done = 1 WHERE status = 'done' AND done != 1",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE tasks SET done = 0 WHERE status = 'active' AND done != 0",
+        [],
+    )?;
+    Ok(())
 }
 
 impl Storage for LocalStorage {
@@ -163,7 +209,8 @@ impl Storage for LocalStorage {
     fn list_tasks(&self, filter: &TaskFilter) -> StorageResult<Vec<Task>> {
         self.with_conn(|conn| {
             let mut sql = String::from(
-                "SELECT id, title, done, project_id, created_at, updated_at FROM tasks WHERE 1=1",
+                "SELECT id, title, status, project_id, created_at, updated_at, due_date, reminder, priority, notes
+                 FROM tasks WHERE 1=1",
             );
             let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
@@ -174,8 +221,10 @@ impl Storage for LocalStorage {
                 values.push(Box::new(project_id.clone()));
             }
             if let Some(done) = filter.done {
-                sql.push_str(" AND done = ?");
-                values.push(Box::new(if done { 1 } else { 0 }));
+                sql.push_str(" AND status = ?");
+                values.push(Box::new(
+                    if done { "done" } else { "active" }.to_string(),
+                ));
             }
             sql.push_str(" ORDER BY created_at DESC");
 
@@ -190,7 +239,8 @@ impl Storage for LocalStorage {
     fn get_task(&self, id: &str) -> StorageResult<Option<Task>> {
         self.with_conn(|conn| {
             conn.query_row(
-                "SELECT id, title, done, project_id, created_at, updated_at FROM tasks WHERE id = ?1",
+                "SELECT id, title, status, project_id, created_at, updated_at, due_date, reminder, priority, notes
+                 FROM tasks WHERE id = ?1",
                 params![id],
                 map_task,
             )
@@ -201,21 +251,35 @@ impl Storage for LocalStorage {
 
     fn upsert_task(&self, task: &Task) -> StorageResult<()> {
         self.with_conn(|conn| {
+            let done = if task.status.is_done() { 1 } else { 0 };
+            let priority = task.priority.map(|p| p.as_str().to_string());
             conn.execute(
-                "INSERT INTO tasks (id, title, done, project_id, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO tasks (
+                    id, title, done, status, project_id, created_at, updated_at,
+                    due_date, reminder, priority, notes
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                  ON CONFLICT(id) DO UPDATE SET
                    title = excluded.title,
                    done = excluded.done,
+                   status = excluded.status,
                    project_id = excluded.project_id,
-                   updated_at = excluded.updated_at",
+                   updated_at = excluded.updated_at,
+                   due_date = excluded.due_date,
+                   reminder = excluded.reminder,
+                   priority = excluded.priority,
+                   notes = excluded.notes",
                 params![
                     task.id,
                     task.title,
-                    task.done as i32,
+                    done,
+                    task.status.as_str(),
                     task.project_id,
                     task.created_at,
-                    task.updated_at
+                    task.updated_at,
+                    task.due_date,
+                    task.reminder,
+                    priority,
+                    task.notes
                 ],
             )?;
             Ok(())
@@ -427,13 +491,30 @@ impl Storage for LocalStorage {
 }
 
 fn map_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
+    use crate::domain::{TaskPriority, TaskStatus};
+
+    let status_raw: String = row.get(2)?;
+    let status = TaskStatus::parse(&status_raw).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, e.into())
+    })?;
+    let priority_raw: Option<String> = row.get(8)?;
+    let priority = match priority_raw {
+        Some(raw) => Some(TaskPriority::parse(&raw).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, e.into())
+        })?),
+        None => None,
+    };
     Ok(Task {
         id: row.get(0)?,
         title: row.get(1)?,
-        done: row.get::<_, i32>(2)? != 0,
+        status,
         project_id: row.get(3)?,
         created_at: row.get(4)?,
         updated_at: row.get(5)?,
+        due_date: row.get(6)?,
+        reminder: row.get(7)?,
+        priority,
+        notes: row.get(9)?,
     })
 }
 
@@ -498,12 +579,22 @@ mod tests {
             let task = Task {
                 id: new_id(),
                 title: "Acheter lait".into(),
-                done: false,
+                status: crate::domain::TaskStatus::Active,
                 project_id: Some(project.id.clone()),
                 created_at: now.clone(),
                 updated_at: now.clone(),
+                due_date: None,
+                reminder: None,
+                priority: Some(crate::domain::TaskPriority::Normal),
+                notes: None,
             };
             db.upsert_task(&task).unwrap();
+
+            let mut done_task = task.clone();
+            done_task.id = new_id();
+            done_task.title = "Déjà fait".into();
+            done_task.status = crate::domain::TaskStatus::Done;
+            db.upsert_task(&done_task).unwrap();
 
             let note = Note {
                 id: new_id(),
@@ -538,7 +629,16 @@ mod tests {
 
         let db = LocalStorage::open(&db_path).unwrap();
         assert_eq!(db.list_projects().unwrap().len(), 1);
-        assert_eq!(db.list_tasks(&TaskFilter::default()).unwrap().len(), 1);
+        assert_eq!(db.list_tasks(&TaskFilter::default()).unwrap().len(), 2);
+        assert_eq!(
+            db.list_tasks(&TaskFilter {
+                done: Some(false),
+                ..Default::default()
+            })
+            .unwrap()
+            .len(),
+            1
+        );
         assert_eq!(db.list_notes(&NoteFilter::default()).unwrap().len(), 1);
         assert_eq!(db.list_postits(&PostItFilter::default()).unwrap().len(), 1);
         assert_eq!(

@@ -1,5 +1,5 @@
 import { useEffect, useState, useTransition } from "react";
-import { listTasks } from "../../services/api";
+import { listTasks, setTaskDone } from "../../services/api";
 import { captureShow } from "../../services/capture";
 import { listenDataChanged } from "../../services/events";
 import {
@@ -12,6 +12,7 @@ import {
   setPanelOpen as storeSetOpen,
 } from "../../stores/ui-store";
 import type { Task } from "../../types/models";
+import { TaskList } from "./TaskList";
 import "./panel.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -22,6 +23,8 @@ export function PanelApp() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [showDone, setShowDone] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -82,7 +85,6 @@ export function PanelApp() {
     const next = !open;
     try {
       if (open) {
-        // Ferme en douceur : slide CSS puis réduit la fenêtre à la poignée.
         setOpen(false);
         storeSetOpen(false);
         await new Promise((r) => window.setTimeout(r, 170));
@@ -90,7 +92,6 @@ export function PanelApp() {
         setOpen(state.open);
         storeSetOpen(state.open);
       } else {
-        // Ouvre : élargit d'abord, puis révèle le contenu.
         const state = await panelSetOpen(true);
         setOpen(state.open);
         storeSetOpen(state.open);
@@ -115,8 +116,30 @@ export function PanelApp() {
     }
   }
 
-  const openTasks = tasks.filter((t) => !t.done);
-  const doneTasks = tasks.filter((t) => t.done);
+  async function toggleTaskDone(task: Task) {
+    const nextDone = task.status !== "done";
+    const previous = tasks;
+    setPendingId(task.id);
+    setTasks((rows) =>
+      rows.map((row) =>
+        row.id === task.id
+          ? { ...row, status: nextDone ? "done" : "active" }
+          : row,
+      ),
+    );
+    try {
+      const updated = await setTaskDone(task.id, nextDone);
+      setTasks((rows) => rows.map((row) => (row.id === updated.id ? updated : row)));
+      if (nextDone) setShowDone(true);
+    } catch {
+      setTasks(previous);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  const activeTasks = tasks.filter((t) => t.status === "active");
+  const doneTasks = tasks.filter((t) => t.status === "done");
 
   return (
     <div className={`panel-root ${open ? "is-open" : "is-closed"}`}>
@@ -157,24 +180,15 @@ export function PanelApp() {
           {loadState === "error" && (
             <p className="panel-error">{error ?? "Erreur"}</p>
           )}
-          {loadState === "ready" && tasks.length === 0 && (
-            <p className="panel-muted">Aucune tâche pour l&apos;instant.</p>
-          )}
-          {loadState === "ready" && tasks.length > 0 && (
-            <ul className="task-list">
-              {openTasks.map((task) => (
-                <li key={task.id} className="task-item">
-                  <span className="task-mark" aria-hidden="true" />
-                  <span className="task-title">{task.title}</span>
-                </li>
-              ))}
-              {doneTasks.slice(0, 5).map((task) => (
-                <li key={task.id} className="task-item is-done">
-                  <span className="task-mark is-done" aria-hidden="true" />
-                  <span className="task-title">{task.title}</span>
-                </li>
-              ))}
-            </ul>
+          {loadState === "ready" && (
+            <TaskList
+              active={activeTasks}
+              done={doneTasks}
+              showDone={showDone}
+              onToggleShowDone={() => setShowDone((v) => !v)}
+              onToggleDone={(task) => void toggleTaskDone(task)}
+              pendingId={pendingId}
+            />
           )}
         </section>
 

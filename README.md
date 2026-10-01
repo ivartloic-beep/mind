@@ -11,8 +11,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 2** : stockage SQLite (`rusqlite`), modèles, CRUD Tauri, event `data-changed`
 - **Étape 3** : panneau latéral droit (~400 px), poignée slide, always-on-top mémorisé
 - **Étape 4** : capture rapide (fenêtre légère, Task/Note/Idée, depuis le panneau)
+- **Étape 5** : tâches dans le panneau (liste, cocher/décocher, terminées)
 
-Pas encore : CRUD tâches avancé UI, tray, raccourcis globaux, post-it (étapes 5+).
+Pas encore : notes UI riche, filtres projets, tray, raccourcis, post-it (étapes 6+).
 
 ## Prérequis
 

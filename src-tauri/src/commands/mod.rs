@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::domain::{
     new_id, now_iso, DataChangedPayload, Note, NoteFilter, NoteKind, PostIt, PostItFilter, Project,
-    Reminder, ReminderFilter, Task, TaskFilter,
+    Reminder, ReminderFilter, Task, TaskFilter, TaskStatus,
 };
 use crate::state::AppState;
 use crate::storage::{Storage, StorageError};
@@ -116,11 +116,39 @@ pub fn create_task(
     let task = Task {
         id: new_id(),
         title,
-        done: false,
+        status: TaskStatus::Active,
         project_id,
         created_at: now.clone(),
         updated_at: now,
+        due_date: None,
+        reminder: None,
+        priority: None,
+        notes: None,
     };
+    state.storage.upsert_task(&task).map_err(map_err)?;
+    emit_changed(&app, "task", &task.id)?;
+    Ok(task)
+}
+
+/// Coche / décoche immédiate depuis le panneau.
+#[tauri::command]
+pub fn set_task_done(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    done: bool,
+) -> Result<Task, String> {
+    let mut task = state
+        .storage
+        .get_task(&id)
+        .map_err(map_err)?
+        .ok_or_else(|| format!("task not found: {id}"))?;
+    task.status = if done {
+        TaskStatus::Done
+    } else {
+        TaskStatus::Active
+    };
+    task.updated_at = now_iso();
     state.storage.upsert_task(&task).map_err(map_err)?;
     emit_changed(&app, "task", &task.id)?;
     Ok(task)

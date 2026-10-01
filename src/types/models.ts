@@ -9,13 +9,20 @@ export type Project = {
   createdAt: string;
 };
 
+export type TaskStatus = "active" | "done";
+export type TaskPriority = "low" | "normal" | "high";
+
 export type Task = {
   id: string;
   title: string;
-  done: boolean;
+  status: TaskStatus;
   projectId: string | null;
   createdAt: string;
   updatedAt: string;
+  dueDate?: string;
+  reminder?: string;
+  priority?: TaskPriority;
+  notes?: string;
 };
 
 /** Note / Idée uniquement — les tâches sont des `Task`. */
