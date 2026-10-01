@@ -1,6 +1,5 @@
 /**
- * Modèles V1 (contrat TS ↔ Rust) — stubs étape 1.
- * Implémentation storage / CRUD = étape 2.
+ * Modèles V1 (contrat TS ↔ Rust) — camelCase, alignés sur le domaine Rust.
  */
 
 export type Project = {
@@ -19,10 +18,13 @@ export type Task = {
   updatedAt: string;
 };
 
+/** Note / Idée uniquement — les tâches sont des `Task`. */
+export type NoteKind = "note" | "idea";
+
 export type Note = {
   id: string;
   body: string;
-  kind: "task" | "note" | "idea";
+  kind: NoteKind;
   projectId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -35,6 +37,7 @@ export type Reminder = {
   snoozedUntil?: string;
 };
 
+/** Fenêtre post-it liée à une Note (pas de copie de contenu). */
 export type PostIt = {
   id: string;
   noteId: string;
@@ -44,4 +47,30 @@ export type PostIt = {
   h: number;
   alwaysOnTop: boolean;
   open: boolean;
+};
+
+export type TaskFilter = {
+  projectId?: string | null;
+  noProject?: boolean;
+  done?: boolean;
+};
+
+export type NoteFilter = {
+  projectId?: string | null;
+  noProject?: boolean;
+  kind?: NoteKind;
+};
+
+export type ReminderFilter = {
+  targetId?: string;
+};
+
+export type PostItFilter = {
+  noteId?: string;
+  open?: boolean;
+};
+
+export type DataChangedPayload = {
+  entity: string;
+  id: string;
 };

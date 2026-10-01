@@ -1,16 +1,17 @@
 /**
- * Abonnements events Tauri — stubs étape 1.
- * Event métier `data-changed` arrive à l'étape 2+.
+ * Abonnements events Tauri — `data-changed` après mutations storage.
  */
 
-export type DataChangedPayload = {
-  entity: string;
-  id: string;
-};
+import { listen } from "@tauri-apps/api/event";
+import type { DataChangedPayload } from "../types/models";
+
+export type { DataChangedPayload };
 
 export async function listenDataChanged(
-  _handler: (payload: DataChangedPayload) => void,
+  handler: (payload: DataChangedPayload) => void,
 ): Promise<() => void> {
-  // Stub : aucun listener tant que le backend n'émet pas.
-  return () => {};
+  const unlisten = await listen<DataChangedPayload>("data-changed", (event) => {
+    handler(event.payload);
+  });
+  return unlisten;
 }

@@ -3,16 +3,23 @@
 App Windows locale-first : capture rapide, panneau latéral, post-it natifs.  
 Stack : **Tauri 2** + **React** + **TypeScript** + **Vite**.
 
-Nom provisoire : **Ma Tête**. Étape 1 = squelette multi-fenêtres uniquement (pas de storage, tray, raccourcis ni features métier).
+Nom provisoire : **Ma Tête**.
+
+## État actuel
+
+- **Étape 1** : squelette multi-fenêtres (`main` / `panel` / `capture` / `postit`)
+- **Étape 2** : stockage SQLite (`rusqlite`), modèles, CRUD Tauri, event `data-changed`, capture = création directe Task/Note
+
+Pas encore : panneau UX, capture UX, tray, raccourcis (étapes 3+).
 
 ## Prérequis
 
 - Node.js 20+ et npm
-- [Rust](https://rustup.rs/) (stable)
-- Sur **Windows** : [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/) (généralement déjà présent)
-- Sur **Linux** (dev / CI) : `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, `patchelf` — voir [prerequisites Tauri](https://tauri.app/start/prerequisites/)
+- [Rust](https://rustup.rs/) (stable, ≥ 1.90 recommandé pour Tauri 2 récent)
+- Sur **Windows** : [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/)
+- Sur **Linux** (dev / CI) : `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, `patchelf` — [prerequisites Tauri](https://tauri.app/start/prerequisites/)
 
-Cible produit : **Windows** uniquement (installeur **NSIS**).
+Cible produit : **Windows** (installeur **NSIS**).
 
 ## Lancer
 
@@ -21,37 +28,26 @@ npm install
 npm run tauri dev
 ```
 
-Équivalents utiles :
+Équivalents :
 
 ```bash
-# Frontend seul (multi-entry Vite)
 npm run dev
 npm run build
-
-# Vérifier le backend Rust sans lancer l'UI
 cd src-tauri && cargo check
+cd src-tauri && cargo test   # persistance SQLite (reopen)
 ```
 
-Au démarrage étape 1 : la fenêtre **panel** (~400 px) s’affiche ; `main`, `capture` et `postit` sont définies mais masquées (stubs).
+DB locale : `{app_data_dir}/ma-tete.db`.
 
 ## Entries frontend
 
 | Entry | Fichier | Rôle |
 |---|---|---|
-| `main` | `index.html` → `src/main.tsx` | Host (tray/raccourcis plus tard) |
-| `panel` | `panel.html` → `src/panel.tsx` | Panneau latéral |
-| `capture` | `capture.html` → `src/capture.tsx` | Capture rapide |
-| `postit` | `postit.html` → `src/postit.tsx` | Post-it natif |
+| `main` | `index.html` → `src/main.tsx` | Host |
+| `panel` | `panel.html` → `src/panel.tsx` | Panneau |
+| `capture` | `capture.html` → `src/capture.tsx` | Capture |
+| `postit` | `postit.html` → `src/postit.tsx` | Post-it |
 
 ## Architecture
 
-Voir le document de référence dans le store projet : `docs/ma-tete-v1-architecture.md`.
-
-## État compile sur cette VM
-
-Environnement Linux (pas Windows). Vérifications locales :
-
-- `npm run build` — frontend multi-entry
-- `cargo check` dans `src-tauri` — backend Tauri
-
-`tauri build` Windows / NSIS nécessite une machine Windows + WebView2.
+Référence store : `docs/ma-tete-v1-architecture.md`.
