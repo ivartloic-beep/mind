@@ -19,6 +19,9 @@ pub fn run() {
             let db_path = resolve_db_path(app.handle())?;
             let storage = LocalStorage::open(&db_path).map_err(|e| e.to_string())?;
             app.manage(AppState { storage });
+            if let Err(err) = windows::panel::init_panel(app.handle()) {
+                eprintln!("panel init: {err}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -45,6 +48,10 @@ pub fn run() {
             commands::get_postit,
             commands::upsert_postit,
             commands::delete_postit,
+            windows::panel::panel_get_state,
+            windows::panel::panel_set_open,
+            windows::panel::panel_set_always_on_top,
+            windows::panel::panel_redock,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

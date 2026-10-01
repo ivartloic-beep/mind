@@ -1,1 +1,3 @@
-//! Création / focus / always-on-top / panel edge — étapes 3–8.
+//! Création / focus / always-on-top / panel edge.
+
+pub mod panel;

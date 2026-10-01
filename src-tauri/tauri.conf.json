@@ -27,7 +27,11 @@
         "width": 400,
         "height": 720,
         "visible": true,
-        "resizable": false
+        "resizable": false,
+        "decorations": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": false,
+        "transparent": false
       },
       {
         "label": "capture",

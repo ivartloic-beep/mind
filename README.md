@@ -8,9 +8,10 @@ Nom provisoire : **Ma Tête**.
 ## État actuel
 
 - **Étape 1** : squelette multi-fenêtres (`main` / `panel` / `capture` / `postit`)
-- **Étape 2** : stockage SQLite (`rusqlite`), modèles, CRUD Tauri, event `data-changed`, capture = création directe Task/Note
+- **Étape 2** : stockage SQLite (`rusqlite`), modèles, CRUD Tauri, event `data-changed`
+- **Étape 3** : panneau latéral droit (~400 px), poignée slide, always-on-top mémorisé
 
-Pas encore : panneau UX, capture UX, tray, raccourcis (étapes 3+).
+Pas encore : capture window UX, tray, raccourcis, post-it (étapes 4+).
 
 ## Prérequis
 
