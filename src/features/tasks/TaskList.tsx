@@ -1,4 +1,11 @@
+import { useState } from "react";
 import type { Project, Task } from "../../types/models";
+import {
+  fireAtInMinutes,
+  fireAtTomorrowMorning,
+  formatReminderLabel,
+} from "../reminders/presets";
+import "../reminders/reminder.css";
 import { ProjectSelect } from "../projects/ProjectSelect";
 
 type Props = {
@@ -9,7 +16,10 @@ type Props = {
   onToggleShowDone: () => void;
   onToggleDone: (task: Task) => void;
   onAssignProject: (task: Task, projectId: string | null) => void;
+  onSetReminder: (task: Task, fireAt: string) => void;
+  onClearReminder: (task: Task) => void;
   pendingId: string | null;
+  focusedTaskId?: string | null;
 };
 
 export function TaskList({
@@ -20,7 +30,10 @@ export function TaskList({
   onToggleShowDone,
   onToggleDone,
   onAssignProject,
+  onSetReminder,
+  onClearReminder,
   pendingId,
+  focusedTaskId,
 }: Props) {
   return (
     <div className="task-board">
@@ -34,8 +47,11 @@ export function TaskList({
               task={task}
               projects={projects}
               pending={pendingId === task.id}
+              focused={focusedTaskId === task.id}
               onToggle={() => onToggleDone(task)}
               onAssignProject={(projectId) => onAssignProject(task, projectId)}
+              onSetReminder={(fireAt) => onSetReminder(task, fireAt)}
+              onClearReminder={() => onClearReminder(task)}
             />
           ))}
         </ul>
@@ -63,8 +79,11 @@ export function TaskList({
                   task={task}
                   projects={projects}
                   pending={pendingId === task.id}
+                  focused={focusedTaskId === task.id}
                   onToggle={() => onToggleDone(task)}
                   onAssignProject={(projectId) => onAssignProject(task, projectId)}
+                  onSetReminder={(fireAt) => onSetReminder(task, fireAt)}
+                  onClearReminder={() => onClearReminder(task)}
                 />
               ))}
             </ul>
@@ -79,18 +98,30 @@ function TaskRow({
   task,
   projects,
   pending,
+  focused,
   onToggle,
   onAssignProject,
+  onSetReminder,
+  onClearReminder,
 }: {
   task: Task;
   projects: Project[];
   pending: boolean;
+  focused: boolean;
   onToggle: () => void;
   onAssignProject: (projectId: string | null) => void;
+  onSetReminder: (fireAt: string) => void;
+  onClearReminder: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const done = task.status === "done";
+  const hasReminder = Boolean(task.reminder);
+
   return (
-    <li className={`task-item ${done ? "is-done" : ""} ${pending ? "is-pending" : ""}`}>
+    <li
+      className={`task-item ${done ? "is-done" : ""} ${pending ? "is-pending" : ""} ${focused ? "is-focused" : ""}`}
+      data-task-id={task.id}
+    >
       <button
         type="button"
         className={`task-check ${done ? "is-checked" : ""}`}
@@ -102,7 +133,27 @@ function TaskRow({
         {done ? "✓" : ""}
       </button>
       <div className="task-body">
-        <span className="task-title">{task.title}</span>
+        <div className="task-title-row">
+          <span className="task-title">{task.title}</span>
+          <button
+            type="button"
+            className={`task-bell ${hasReminder ? "has-reminder" : ""} ${menuOpen ? "is-open" : ""}`}
+            disabled={pending}
+            aria-label={
+              hasReminder
+                ? `Rappel ${formatReminderLabel(task.reminder!)} — modifier`
+                : "Ajouter un rappel"
+            }
+            title={
+              hasReminder
+                ? `Rappel : ${formatReminderLabel(task.reminder!)}`
+                : "Rappel"
+            }
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            🔔
+          </button>
+        </div>
         <div className="task-meta-row">
           <ProjectSelect
             projects={projects}
@@ -111,6 +162,11 @@ function TaskRow({
             onChange={onAssignProject}
             ariaLabel="Projet de la tâche"
           />
+          {hasReminder && (
+            <span className="task-reminder-when">
+              🔔 {formatReminderLabel(task.reminder!)}
+            </span>
+          )}
           {(task.dueDate || task.priority) && (
             <span className="task-meta">
               {task.priority ? task.priority : null}
@@ -119,6 +175,56 @@ function TaskRow({
             </span>
           )}
         </div>
+        {menuOpen && (
+          <div className="task-reminder-menu">
+            <button
+              type="button"
+              className="task-reminder-chip"
+              disabled={pending}
+              onClick={() => {
+                onSetReminder(fireAtInMinutes(10));
+                setMenuOpen(false);
+              }}
+            >
+              +10 min
+            </button>
+            <button
+              type="button"
+              className="task-reminder-chip"
+              disabled={pending}
+              onClick={() => {
+                onSetReminder(fireAtInMinutes(60));
+                setMenuOpen(false);
+              }}
+            >
+              +1 h
+            </button>
+            <button
+              type="button"
+              className="task-reminder-chip"
+              disabled={pending}
+              onClick={() => {
+                onSetReminder(fireAtTomorrowMorning());
+                setMenuOpen(false);
+              }}
+            >
+              Demain 9 h
+            </button>
+            {hasReminder && (
+              <button
+                type="button"
+                className="task-reminder-chip is-danger"
+                disabled={pending}
+                onClick={() => {
+                  onClearReminder();
+                  setMenuOpen(false);
+                }}
+              >
+                Retirer
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </li>
   );

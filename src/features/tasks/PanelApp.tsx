@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
+  clearTaskReminder,
+  dismissReminder,
   listNotes,
   listProjects,
   listTasks,
+  openTaskFromReminder,
   setTaskDone,
+  setTaskReminder,
+  snoozeReminder,
+  type SnoozeKind,
   upsertTask,
 } from "../../services/api";
 import { captureShow } from "../../services/capture";
-import { listenDataChanged } from "../../services/events";
+import {
+  listenDataChanged,
+  listenReminderDue,
+  listenReminderOpenTask,
+  type ReminderDuePayload,
+} from "../../services/events";
 import {
   panelGetState,
   panelSetAlwaysOnTop,
@@ -27,6 +38,7 @@ import {
 } from "../projects/filter";
 import { ProjectFilterBar } from "../projects/ProjectFilterBar";
 import { ProjectsManage } from "../projects/ProjectsManage";
+import { ReminderDueBanner } from "../reminders/ReminderDueBanner";
 import { TimerPanel } from "../timer/TimerPanel";
 import { TaskList } from "./TaskList";
 import "./panel.css";
@@ -46,6 +58,11 @@ export function PanelApp() {
   const [notesError, setNotesError] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [dueReminder, setDueReminder] = useState<ReminderDuePayload | null>(
+    null,
+  );
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const filterRef = useRef<ProjectFilterValue>(filter);
   filterRef.current = filter;
@@ -110,7 +127,7 @@ export function PanelApp() {
 
     void bootstrap();
 
-    let unlisten: (() => void) | undefined;
+    const unlistens: Array<() => void> = [];
     void listenDataChanged((payload) => {
       if (payload.entity === "project") {
         startTransition(() => {
@@ -132,7 +149,7 @@ export function PanelApp() {
             });
         });
       }
-      if (payload.entity === "task") {
+      if (payload.entity === "task" || payload.entity === "reminder") {
         startTransition(() => {
           void refreshTasks(filterRef.current).catch(() => {
             /* ignore */
@@ -147,12 +164,37 @@ export function PanelApp() {
         });
       }
     }).then((fn) => {
-      unlisten = fn;
+      unlistens.push(fn);
+    });
+
+    void listenReminderDue((payload) => {
+      setDueReminder(payload);
+      setOpen(true);
+      storeSetOpen(true);
+      void panelSetOpen(true).catch(() => {
+        /* ignore */
+      });
+    }).then((fn) => {
+      unlistens.push(fn);
+    });
+
+    void listenReminderOpenTask((payload) => {
+      setFocusedTaskId(payload.taskId);
+      setOpen(true);
+      storeSetOpen(true);
+      window.setTimeout(() => {
+        const el = document.querySelector(
+          `[data-task-id="${payload.taskId}"]`,
+        );
+        el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }, 80);
+    }).then((fn) => {
+      unlistens.push(fn);
     });
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      for (const fn of unlistens) fn();
     };
   }, [refreshNotes, refreshProjects, refreshTasks]);
 
@@ -252,6 +294,81 @@ export function PanelApp() {
     }
   }
 
+  async function assignTaskReminder(task: Task, fireAt: string) {
+    const previous = tasks;
+    setPendingId(task.id);
+    setTasks((rows) =>
+      rows.map((row) =>
+        row.id === task.id ? { ...row, reminder: fireAt } : row,
+      ),
+    );
+    try {
+      await setTaskReminder(task.id, fireAt);
+      await refreshTasks(filterRef.current);
+    } catch {
+      setTasks(previous);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function removeTaskReminder(task: Task) {
+    const previous = tasks;
+    setPendingId(task.id);
+    setTasks((rows) =>
+      rows.map((row) =>
+        row.id === task.id ? { ...row, reminder: undefined } : row,
+      ),
+    );
+    try {
+      await clearTaskReminder(task.id);
+      await refreshTasks(filterRef.current);
+    } catch {
+      setTasks(previous);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleOpenDue() {
+    if (!dueReminder) return;
+    setReminderBusy(true);
+    try {
+      await openTaskFromReminder(dueReminder.taskId);
+      setFocusedTaskId(dueReminder.taskId);
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
+  async function handleSnoozeDue(kind: SnoozeKind) {
+    if (!dueReminder) return;
+    setReminderBusy(true);
+    try {
+      await snoozeReminder(dueReminder.reminderId, kind);
+      setDueReminder(null);
+      await refreshTasks(filterRef.current);
+    } catch {
+      /* keep banner */
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
+  async function handleDismissDue() {
+    if (!dueReminder) return;
+    setReminderBusy(true);
+    try {
+      await dismissReminder(dueReminder.reminderId);
+      setDueReminder(null);
+      await refreshTasks(filterRef.current);
+    } catch {
+      /* keep banner */
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
   function changeFilter(next: ProjectFilterValue) {
     setFilter(next);
     storeSetFilter(next);
@@ -302,6 +419,15 @@ export function PanelApp() {
 
         <section className="panel-section panel-section-grow">
           <h2>Tâches</h2>
+          {dueReminder && (
+            <ReminderDueBanner
+              due={dueReminder}
+              busy={reminderBusy}
+              onOpen={() => void handleOpenDue()}
+              onSnooze={(kind) => void handleSnoozeDue(kind)}
+              onDismiss={() => void handleDismissDue()}
+            />
+          )}
           {tasksState === "loading" && (
             <p className="panel-muted">Chargement…</p>
           )}
@@ -319,7 +445,12 @@ export function PanelApp() {
               onAssignProject={(task, projectId) =>
                 void assignTaskProject(task, projectId)
               }
+              onSetReminder={(task, fireAt) =>
+                void assignTaskReminder(task, fireAt)
+              }
+              onClearReminder={(task) => void removeTaskReminder(task)}
               pendingId={pendingId}
+              focusedTaskId={focusedTaskId}
             />
           )}
         </section>

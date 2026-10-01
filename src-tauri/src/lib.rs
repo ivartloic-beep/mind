@@ -19,7 +19,7 @@ pub fn run() {
         .setup(|app| {
             let db_path = resolve_db_path(app.handle())?;
             let storage = LocalStorage::open(&db_path).map_err(|e| e.to_string())?;
-            app.manage(AppState { storage });
+            app.manage(AppState::new(storage));
             if let Err(err) = windows::panel::init_panel(app.handle()) {
                 eprintln!("panel init: {err}");
             }
@@ -29,6 +29,7 @@ pub fn run() {
             if let Err(err) = windows::postit::restore_open_postits(app.handle()) {
                 eprintln!("postit restore: {err}");
             }
+            os::notifications::start_reminder_scheduler(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -66,6 +67,11 @@ pub fn run() {
             windows::postit::postit_close,
             windows::postit::postit_update_geometry,
             windows::postit::postit_set_always_on_top,
+            os::notifications::set_task_reminder,
+            os::notifications::clear_task_reminder,
+            os::notifications::snooze_reminder,
+            os::notifications::dismiss_reminder,
+            os::notifications::open_task_from_reminder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

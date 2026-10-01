@@ -72,6 +72,20 @@ export const upsertReminder = (reminder: Reminder) =>
 export const deleteReminder = (id: string) =>
   invoke<void>("delete_reminder", { id });
 
+export type SnoozeKind = "10m" | "1h" | "tomorrow";
+
+/** Associe / met à jour un rappel sur une tâche. */
+export const setTaskReminder = (taskId: string, fireAt: string) =>
+  invoke<Reminder>("set_task_reminder", { taskId, fireAt });
+export const clearTaskReminder = (taskId: string) =>
+  invoke<void>("clear_task_reminder", { taskId });
+export const snoozeReminder = (id: string, kind: SnoozeKind) =>
+  invoke<Reminder>("snooze_reminder", { id, kind });
+export const dismissReminder = (id: string) =>
+  invoke<void>("dismiss_reminder", { id });
+export const openTaskFromReminder = (taskId: string) =>
+  invoke<void>("open_task_from_reminder", { taskId });
+
 // PostIts
 export const listPostits = (filter?: PostItFilter) =>
   invoke<PostIt[]>("list_postits", { filter: filter ?? null });

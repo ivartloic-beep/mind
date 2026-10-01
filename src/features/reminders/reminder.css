@@ -1,0 +1,168 @@
+.reminder-due {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.65rem 0.7rem;
+  margin-bottom: 0.35rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border-radius: 6px;
+}
+
+.reminder-due.is-missed {
+  border-color: color-mix(in srgb, #c45c26 50%, var(--border));
+  background: color-mix(in srgb, #c45c26 12%, var(--bg));
+}
+
+.reminder-due-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.reminder-due-bell {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+.reminder-due-title {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reminder-due-task {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.reminder-due-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.reminder-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.74rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.reminder-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.reminder-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.reminder-btn-primary {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.reminder-btn-ghost {
+  border-color: transparent;
+  color: var(--muted);
+  padding-inline: 0.4rem;
+}
+
+.task-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.task-title-row .task-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-bell {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.1rem 0.15rem;
+  cursor: pointer;
+  opacity: 0.55;
+  flex: 0 0 auto;
+}
+
+.task-bell:hover:not(:disabled),
+.task-bell.is-open {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.task-bell.has-reminder {
+  opacity: 0.95;
+  color: var(--accent);
+}
+
+.task-bell:disabled {
+  cursor: wait;
+}
+
+.task-reminder-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0 0.1rem;
+}
+
+.task-reminder-chip {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.task-reminder-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.task-reminder-chip.is-danger:hover:not(:disabled) {
+  border-color: #c45c26;
+  color: #c45c26;
+}
+
+.task-reminder-when {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.task-item.is-focused {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
