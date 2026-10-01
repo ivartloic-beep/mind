@@ -86,6 +86,11 @@ export const dismissReminder = (id: string) =>
 export const openTaskFromReminder = (taskId: string) =>
   invoke<void>("open_task_from_reminder", { taskId });
 
+// Autostart (étape 12)
+export const autostartIsEnabled = () => invoke<boolean>("autostart_is_enabled");
+export const autostartSetEnabled = (enabled: boolean) =>
+  invoke<boolean>("autostart_set_enabled", { enabled });
+
 // PostIts
 export const listPostits = (filter?: PostItFilter) =>
   invoke<PostIt[]>("list_postits", { filter: filter ?? null });

@@ -11,6 +11,8 @@ const CAPTURE_HEIGHT: f64 = 168.0;
 #[serde(rename_all = "camelCase")]
 pub struct CaptureOpenedPayload {
     pub clear: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
 
 fn capture_window(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -57,6 +59,11 @@ pub fn init_capture(app: &AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn capture_show(app: AppHandle) -> Result<(), String> {
+    capture_show_kind(app, None)
+}
+
+/// Ouvre la capture, optionnellement pré-sélectionne le type (task|note|idea).
+pub fn capture_show_kind(app: AppHandle, kind: Option<String>) -> Result<(), String> {
     let window = capture_window(&app)?;
     center_on_monitor(&window)?;
     window
@@ -66,7 +73,10 @@ pub fn capture_show(app: AppHandle) -> Result<(), String> {
     window.set_focus().map_err(|e| e.to_string())?;
     app.emit(
         "capture-opened",
-        CaptureOpenedPayload { clear: true },
+        CaptureOpenedPayload {
+            clear: true,
+            kind,
+        },
     )
     .map_err(|e| e.to_string())?;
     Ok(())

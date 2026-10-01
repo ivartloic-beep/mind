@@ -20,7 +20,8 @@ pub struct PanelPrefs {
 impl Default for PanelPrefs {
     fn default() -> Self {
         Self {
-            open: true,
+            // Étape 12 : boot discret — ouvrir via tray / CTRL+ALT+Espace.
+            open: false,
             always_on_top: false,
         }
     }
@@ -96,8 +97,12 @@ pub fn apply_panel_geometry(window: &WebviewWindow, open: bool) -> Result<(), St
     Ok(())
 }
 
-pub fn init_panel(app: &AppHandle) -> Result<(), String> {
-    let prefs = load_prefs(app);
+/// Initialise le panneau. Si `background` (autostart), démarre fermé / sans focus.
+pub fn init_panel(app: &AppHandle, background: bool) -> Result<(), String> {
+    let mut prefs = load_prefs(app);
+    if background {
+        prefs.open = false;
+    }
     let window = panel_window(app)?;
 
     let _ = window.set_decorations(false);
@@ -107,10 +112,14 @@ pub fn init_panel(app: &AppHandle) -> Result<(), String> {
         .set_always_on_top(prefs.always_on_top)
         .map_err(|e| e.to_string())?;
     apply_panel_geometry(&window, prefs.open)?;
-    let _ = window.show();
-
-    // Stocker l'état ouvert courant pour les commands (via prefs fichier).
     let _ = save_prefs(app, &prefs);
+
+    if background {
+        // Autostart : app en arrière-plan, pas de flash panneau.
+        let _ = window.hide();
+    } else {
+        let _ = window.show();
+    }
     Ok(())
 }
 

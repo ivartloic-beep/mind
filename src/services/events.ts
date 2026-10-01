@@ -67,3 +67,12 @@ export async function listenPanelStateChanged(
   );
   return unlisten;
 }
+
+export async function listenPanelFocusSettings(
+  handler: () => void,
+): Promise<() => void> {
+  const unlisten = await listen("panel-focus-settings", () => {
+    handler();
+  });
+  return unlisten;
+}

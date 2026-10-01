@@ -52,11 +52,24 @@ export function CaptureApp() {
         return;
       }
 
-      const unOpened = await listen<{ clear: boolean }>("capture-opened", (event) => {
-        if (cancelled) return;
-        if (event.payload.clear) resetDraft();
-        else inputRef.current?.focus();
-      });
+      const unOpened = await listen<{ clear: boolean; kind?: CaptureKind }>(
+        "capture-opened",
+        (event) => {
+          if (cancelled) return;
+          if (event.payload.clear) {
+            resetDraft();
+            if (
+              event.payload.kind === "task" ||
+              event.payload.kind === "note" ||
+              event.payload.kind === "idea"
+            ) {
+              setKind(event.payload.kind);
+            }
+          } else {
+            inputRef.current?.focus();
+          }
+        },
+      );
       unsubs.push(unOpened);
 
       const win = getCurrentWindow();

@@ -14,13 +14,35 @@ use storage::local::LocalStorage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_notification::init())
+    let mut builder = tauri::Builder::default();
+
+    // Single-instance en premier (avant les autres plugins).
+    #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            os::tray::focus_existing_instance(app);
+        }));
+    }
+
+    #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+    {
+        builder = builder.plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ));
+    }
+
+    builder = builder.plugin(tauri_plugin_notification::init());
+
+    let app = builder
         .setup(|app| {
             let db_path = resolve_db_path(app.handle())?;
             let storage = LocalStorage::open(&db_path).map_err(|e| e.to_string())?;
             app.manage(AppState::new(storage));
-            if let Err(err) = windows::panel::init_panel(app.handle()) {
+
+            let autostart_launch = std::env::args().any(|a| a == "--autostart");
+
+            if let Err(err) = windows::panel::init_panel(app.handle(), autostart_launch) {
                 eprintln!("panel init: {err}");
             }
             if let Err(err) = windows::capture::init_capture(app.handle()) {
@@ -29,8 +51,24 @@ pub fn run() {
             if let Err(err) = windows::postit::restore_open_postits(app.handle()) {
                 eprintln!("postit restore: {err}");
             }
+
             os::notifications::start_reminder_scheduler(app.handle().clone());
             os::shortcuts::register_shortcuts(app.handle());
+
+            #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+            {
+                os::autostart::init_autostart(app.handle());
+            }
+
+            if let Err(err) = os::tray::init_tray(app.handle()) {
+                eprintln!("tray init: {err}");
+            }
+
+            // Main reste cachée (host tray / shortcuts).
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.hide();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -73,9 +111,15 @@ pub fn run() {
             os::notifications::snooze_reminder,
             os::notifications::dismiss_reminder,
             os::notifications::open_task_from_reminder,
+            os::autostart::autostart_set_enabled,
+            os::autostart::autostart_is_enabled,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        os::tray::handle_run_event(app_handle, &event);
+    });
 }
 
 fn resolve_db_path(app: &tauri::AppHandle) -> Result<PathBuf, Box<dyn std::error::Error>> {

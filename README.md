@@ -18,8 +18,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 9** : minuteur 25/5 (démarrer / pause / notif Windows)
 - **Étape 10** : rappels tâche (🔔, notif Windows, snooze +10 min / +1 h / demain)
 - **Étape 11** : raccourcis globaux CTRL+ALT+N (capture) / CTRL+ALT+Espace (panneau)
+- **Étape 12** : tray + menu, autostart ON, single-instance, boot sans flash
 
-Pas encore : tray / autostart (étape 12).
+V1 desktop complète (étapes 1–12). Test réel Windows recommandé via installateur **NSIS**.
 
 ## Prérequis
 

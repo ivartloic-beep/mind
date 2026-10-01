@@ -103,24 +103,29 @@ fn find_for_note(state: &AppState, note_id: &str) -> Result<Option<PostIt>, Stri
 #[tauri::command]
 pub fn postit_open_for_note(
     app: AppHandle,
-    state: State<'_, AppState>,
     note_id: String,
 ) -> Result<PostIt, String> {
+    open_for_note_id(&app, &note_id)
+}
+
+/// Helper tray / commands — ouvre le post-it d’une note.
+pub fn open_for_note_id(app: &AppHandle, note_id: &str) -> Result<PostIt, String> {
+    let state = app.state::<AppState>();
     if state
         .storage
-        .get_note(&note_id)
+        .get_note(note_id)
         .map_err(|e| e.to_string())?
         .is_none()
     {
         return Err(format!("note introuvable: {note_id}"));
     }
 
-    let offset = cascade_offset(&app);
-    let mut postit = match find_for_note(&state, &note_id)? {
+    let offset = cascade_offset(app);
+    let mut postit = match find_for_note(&state, note_id)? {
         Some(existing) => existing,
         None => PostIt {
             id: new_id(),
-            note_id: note_id.clone(),
+            note_id: note_id.to_string(),
             x: 80.0 + offset,
             y: 80.0 + offset,
             w: DEFAULT_W,
@@ -140,7 +145,7 @@ pub fn postit_open_for_note(
         .storage
         .upsert_postit(&postit)
         .map_err(|e| e.to_string())?;
-    ensure_window(&app, &postit)?;
+    ensure_window(app, &postit)?;
     let _ = app.emit(
         "data-changed",
         DataChangedPayload {

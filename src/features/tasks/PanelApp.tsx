@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
+  autostartIsEnabled,
+  autostartSetEnabled,
   clearTaskReminder,
   dismissReminder,
   listNotes,
@@ -15,6 +17,7 @@ import {
 import { captureShow } from "../../services/capture";
 import {
   listenDataChanged,
+  listenPanelFocusSettings,
   listenPanelStateChanged,
   listenReminderDue,
   listenReminderOpenTask,
@@ -64,9 +67,12 @@ export function PanelApp() {
   );
   const [reminderBusy, setReminderBusy] = useState(false);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const [autostart, setAutostart] = useState(true);
+  const [autostartBusy, setAutostartBusy] = useState(false);
   const [, startTransition] = useTransition();
   const filterRef = useRef<ProjectFilterValue>(filter);
   filterRef.current = filter;
+  const settingsRef = useRef<HTMLElement | null>(null);
 
   const refreshProjects = useCallback(async () => {
     const rows = await listProjects();
@@ -101,6 +107,13 @@ export function PanelApp() {
         storeSetAot(state.alwaysOnTop);
       } catch {
         // Hors Tauri / prefs absentes — UI reste utilisable.
+      }
+
+      try {
+        const enabled = await autostartIsEnabled();
+        if (!cancelled) setAutostart(enabled);
+      } catch {
+        /* plugin indisponible hors desktop */
       }
 
       try {
@@ -202,6 +215,19 @@ export function PanelApp() {
       unlistens.push(fn);
     });
 
+    void listenPanelFocusSettings(() => {
+      setOpen(true);
+      storeSetOpen(true);
+      window.setTimeout(() => {
+        settingsRef.current?.scrollIntoView({
+          block: "nearest",
+          behavior: "smooth",
+        });
+      }, 80);
+    }).then((fn) => {
+      unlistens.push(fn);
+    });
+
     return () => {
       cancelled = true;
       for (const fn of unlistens) fn();
@@ -263,6 +289,20 @@ export function PanelApp() {
     } catch {
       setAlwaysOnTop(!next);
       storeSetAot(!next);
+    }
+  }
+
+  async function toggleAutostart() {
+    const next = !autostart;
+    setAutostartBusy(true);
+    setAutostart(next);
+    try {
+      const enabled = await autostartSetEnabled(next);
+      setAutostart(enabled);
+    } catch {
+      setAutostart(!next);
+    } finally {
+      setAutostartBusy(false);
     }
   }
 
@@ -480,7 +520,11 @@ export function PanelApp() {
           <TimerPanel />
         </section>
 
-        <section className="panel-section panel-settings">
+        <section
+          className="panel-section panel-settings"
+          ref={settingsRef}
+          id="panel-settings"
+        >
           <h2>Réglages</h2>
           <ProjectsManage
             projects={projects}
@@ -510,6 +554,15 @@ export function PanelApp() {
               onChange={() => void toggleAlwaysOnTop()}
             />
             <span>Toujours au-dessus</span>
+          </label>
+          <label className="panel-toggle">
+            <input
+              type="checkbox"
+              checked={autostart}
+              disabled={autostartBusy}
+              onChange={() => void toggleAutostart()}
+            />
+            <span>Démarrer avec Windows</span>
           </label>
         </section>
       </div>

@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   isPermissionGranted,
   requestPermission,
@@ -114,6 +115,50 @@ export function TimerPanel() {
   useEffect(() => {
     savePrefs({ workMinutes, breakMinutes, soundEnabled });
   }, [workMinutes, breakMinutes, soundEnabled]);
+
+  const statusRef = useRef(status);
+  const remainingRef = useRef(remaining);
+  statusRef.current = status;
+  remainingRef.current = remaining;
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<string>("timer-command", (event) => {
+      const cmd = event.payload;
+      if (cmd === "pause") {
+        if (statusRef.current === "running") setStatus("paused");
+        return;
+      }
+      if (cmd !== "start") return;
+      const prev = statusRef.current;
+      if (prev === "running") return;
+      if (prev === "paused") {
+        setStatus("running");
+        return;
+      }
+      // idle / finished — même logique que le bouton Démarrer
+      if (prev === "finished" || prev === "idle") {
+        const next =
+          prev === "finished"
+            ? modeRef.current === "work"
+              ? "break"
+              : "work"
+            : modeRef.current;
+        setMode(next);
+        setRemaining(
+          (next === "work" ? workMinutes : breakMinutes) * 60,
+        );
+      } else if (remainingRef.current <= 0) {
+        setRemaining(
+          (modeRef.current === "work" ? workMinutes : breakMinutes) * 60,
+        );
+      }
+      setStatus("running");
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [workMinutes, breakMinutes]);
 
   useEffect(() => {
     if (status !== "running") return;
