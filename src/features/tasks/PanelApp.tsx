@@ -1,5 +1,6 @@
 import { useEffect, useState, useTransition } from "react";
 import { listTasks } from "../../services/api";
+import { captureShow } from "../../services/capture";
 import { listenDataChanged } from "../../services/events";
 import {
   panelGetState,
@@ -55,7 +56,7 @@ export function PanelApp() {
 
     let unlisten: (() => void) | undefined;
     void listenDataChanged((payload) => {
-      if (payload.entity !== "task") return;
+      if (payload.entity !== "task" && payload.entity !== "note") return;
       startTransition(() => {
         void listTasks()
           .then((rows) => {
@@ -139,8 +140,12 @@ export function PanelApp() {
 
         <section className="panel-section">
           <h2>Capturer</h2>
-          <button type="button" className="panel-stub-btn" disabled>
-            Capture rapide — bientôt
+          <button
+            type="button"
+            className="panel-capture-btn"
+            onClick={() => void captureShow()}
+          >
+            Qu&apos;est-ce que tu veux retenir ?
           </button>
         </section>
 

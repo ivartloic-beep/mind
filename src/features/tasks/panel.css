@@ -114,17 +114,23 @@
   font-size: 0.88rem;
 }
 
-.panel-stub-btn {
+.panel-capture-btn {
   appearance: none;
-  border: 1px dashed var(--border);
-  background: transparent;
-  color: var(--muted);
-  border-radius: 6px;
-  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 90%, var(--accent));
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
   text-align: left;
   font: inherit;
-  font-size: 0.9rem;
-  cursor: not-allowed;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.panel-capture-btn:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 82%, var(--accent));
 }
 
 .task-list {
