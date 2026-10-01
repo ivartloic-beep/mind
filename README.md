@@ -15,8 +15,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 6** : notes dans le panneau (créer / éditer / lister)
 - **Étape 7** : projets optionnels + filtres Tout / Sans projet / Projet
 - **Étape 8** : post-its fenêtres natives (`postit-{id}`), persistés, liés à Note
+- **Étape 9** : minuteur 25/5 (démarrer / pause / notif Windows)
 
-Pas encore : timer, rappels OS, tray, raccourcis (étapes 9+).
+Pas encore : rappels OS, tray, raccourcis (étapes 10+).
 
 ## Prérequis
 

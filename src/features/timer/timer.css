@@ -1,0 +1,111 @@
+.timer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.timer-panel.is-finished .timer-display {
+  animation: timer-pulse 1s ease-in-out 3;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+}
+
+.timer-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+}
+
+.timer-clock {
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-mode {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.timer-controls,
+.timer-modes,
+.timer-durations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.timer-btn,
+.timer-chip {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.timer-btn.is-primary,
+.timer-chip.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.timer-btn:disabled,
+.timer-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.timer-durations label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.timer-durations input {
+  width: 3.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  padding: 0.2rem 0.3rem;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.timer-sound {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  user-select: none;
+}
+
+.timer-sound input {
+  accent-color: var(--accent);
+}
+
+@keyframes timer-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}

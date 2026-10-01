@@ -15,6 +15,7 @@ use storage::local::LocalStorage;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let db_path = resolve_db_path(app.handle())?;
             let storage = LocalStorage::open(&db_path).map_err(|e| e.to_string())?;

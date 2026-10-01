@@ -27,6 +27,7 @@ import {
 } from "../projects/filter";
 import { ProjectFilterBar } from "../projects/ProjectFilterBar";
 import { ProjectsManage } from "../projects/ProjectsManage";
+import { TimerPanel } from "../timer/TimerPanel";
 import { TaskList } from "./TaskList";
 import "./panel.css";
 
@@ -335,7 +336,7 @@ export function PanelApp() {
 
         <section className="panel-section">
           <h2>Minuteur</h2>
-          <p className="panel-muted">25 / 5 — bientôt.</p>
+          <TimerPanel />
         </section>
 
         <section className="panel-section panel-settings">
