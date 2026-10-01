@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { createNote, upsertNote } from "../../services/api";
-import type { Note } from "../../types/models";
+import type { Note, Project } from "../../types/models";
+import { ProjectSelect } from "../projects/ProjectSelect";
 
 type Props = {
   notes: Note[];
+  projects: Project[];
   loadState: "loading" | "ready" | "error";
   error: string | null;
 };
 
-export function NotesPanel({ notes, loadState, error }: Props) {
+export function NotesPanel({ notes, projects, loadState, error }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBody, setDraftBody] = useState("");
+  const [draftProjectId, setDraftProjectId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -24,10 +27,12 @@ export function NotesPanel({ notes, loadState, error }: Props) {
     if (selected) {
       setDraftTitle(selected.title ?? "");
       setDraftBody(selected.body);
+      setDraftProjectId(selected.projectId);
       setSaveError(null);
     } else {
       setDraftTitle("");
       setDraftBody("");
+      setDraftProjectId(null);
     }
   }, [selected, creating, selectedId]);
 
@@ -42,6 +47,7 @@ export function NotesPanel({ notes, loadState, error }: Props) {
     setSelectedId(null);
     setDraftTitle("");
     setDraftBody("");
+    setDraftProjectId(null);
     setSaveError(null);
     window.setTimeout(() => bodyRef.current?.focus(), 40);
   }
@@ -54,7 +60,7 @@ export function NotesPanel({ notes, loadState, error }: Props) {
     try {
       const title = draftTitle.trim() || null;
       if (creating || !selected) {
-        const created = await createNote(body, "note", null, title);
+        const created = await createNote(body, "note", draftProjectId, title);
         setCreating(false);
         setSelectedId(created.id);
       } else {
@@ -62,7 +68,7 @@ export function NotesPanel({ notes, loadState, error }: Props) {
           ...selected,
           title: title ?? undefined,
           body,
-          projectId: selected.projectId,
+          projectId: draftProjectId,
         });
         setSelectedId(updated.id);
       }
@@ -79,10 +85,12 @@ export function NotesPanel({ notes, loadState, error }: Props) {
     if (selected) {
       setDraftTitle(selected.title ?? "");
       setDraftBody(selected.body);
+      setDraftProjectId(selected.projectId);
     } else {
       setSelectedId(null);
       setDraftTitle("");
       setDraftBody("");
+      setDraftProjectId(null);
     }
   }
 
@@ -107,26 +115,34 @@ export function NotesPanel({ notes, loadState, error }: Props) {
 
       {loadState === "ready" && !editing && notes.length > 0 && (
         <ul className="notes-list">
-          {notes.map((note) => (
-            <li key={note.id}>
-              <button
-                type="button"
-                className="notes-item"
-                onClick={() => {
-                  setCreating(false);
-                  setSelectedId(note.id);
-                }}
-              >
-                <span className="notes-item-kind">{note.kind === "idea" ? "idée" : "note"}</span>
-                <span className="notes-item-title">
-                  {note.title?.trim() || preview(note.body)}
-                </span>
-                {note.title?.trim() ? (
-                  <span className="notes-item-preview">{preview(note.body)}</span>
-                ) : null}
-              </button>
-            </li>
-          ))}
+          {notes.map((note) => {
+            const projectName = note.projectId
+              ? projects.find((p) => p.id === note.projectId)?.name
+              : null;
+            return (
+              <li key={note.id}>
+                <button
+                  type="button"
+                  className="notes-item"
+                  onClick={() => {
+                    setCreating(false);
+                    setSelectedId(note.id);
+                  }}
+                >
+                  <span className="notes-item-kind">
+                    {note.kind === "idea" ? "idée" : "note"}
+                    {projectName ? ` · ${projectName}` : ""}
+                  </span>
+                  <span className="notes-item-title">
+                    {note.title?.trim() || preview(note.body)}
+                  </span>
+                  {note.title?.trim() ? (
+                    <span className="notes-item-preview">{preview(note.body)}</span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -149,6 +165,15 @@ export function NotesPanel({ notes, loadState, error }: Props) {
             onChange={(e) => setDraftBody(e.target.value)}
             disabled={saving}
           />
+          <label className="notes-project-row">
+            <span>Projet</span>
+            <ProjectSelect
+              projects={projects}
+              value={draftProjectId}
+              disabled={saving}
+              onChange={setDraftProjectId}
+            />
+          </label>
           <div className="notes-editor-actions">
             <button
               type="button"

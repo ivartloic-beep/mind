@@ -1,5 +1,11 @@
-import { useEffect, useState, useTransition } from "react";
-import { listNotes, listTasks, setTaskDone } from "../../services/api";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  listNotes,
+  listProjects,
+  listTasks,
+  setTaskDone,
+  upsertTask,
+} from "../../services/api";
 import { captureShow } from "../../services/capture";
 import { listenDataChanged } from "../../services/events";
 import {
@@ -8,11 +14,19 @@ import {
   panelSetOpen,
 } from "../../services/panel";
 import {
+  setActiveFilter as storeSetFilter,
   setPanelAlwaysOnTop as storeSetAot,
   setPanelOpen as storeSetOpen,
 } from "../../stores/ui-store";
-import type { Note, Task } from "../../types/models";
+import type { Note, Project, Task } from "../../types/models";
 import { NotesPanel } from "../notes/NotesPanel";
+import {
+  type ProjectFilterValue,
+  toNoteFilter,
+  toTaskFilter,
+} from "../projects/filter";
+import { ProjectFilterBar } from "../projects/ProjectFilterBar";
+import { ProjectsManage } from "../projects/ProjectsManage";
 import { TaskList } from "./TaskList";
 import "./panel.css";
 
@@ -21,6 +35,8 @@ type LoadState = "loading" | "ready" | "error";
 export function PanelApp() {
   const [open, setOpen] = useState(true);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [filter, setFilter] = useState<ProjectFilterValue>("all");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [tasksState, setTasksState] = useState<LoadState>("loading");
@@ -30,6 +46,28 @@ export function PanelApp() {
   const [showDone, setShowDone] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const filterRef = useRef<ProjectFilterValue>(filter);
+  filterRef.current = filter;
+
+  const refreshProjects = useCallback(async () => {
+    const rows = await listProjects();
+    setProjects(rows);
+    return rows;
+  }, []);
+
+  const refreshTasks = useCallback(async (nextFilter: ProjectFilterValue) => {
+    const rows = await listTasks(toTaskFilter(nextFilter));
+    setTasks(rows);
+    setTasksState("ready");
+    setTasksError(null);
+  }, []);
+
+  const refreshNotes = useCallback(async (nextFilter: ProjectFilterValue) => {
+    const rows = await listNotes(toNoteFilter(nextFilter));
+    setNotes(rows);
+    setNotesState("ready");
+    setNotesError(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,11 +85,13 @@ export function PanelApp() {
       }
 
       try {
-        const rows = await listTasks();
-        if (cancelled) return;
-        setTasks(rows);
-        setTasksState("ready");
-        setTasksError(null);
+        await refreshProjects();
+      } catch {
+        /* projets optionnels */
+      }
+
+      try {
+        await refreshTasks(filterRef.current);
       } catch (err) {
         if (cancelled) return;
         setTasksState("error");
@@ -59,11 +99,7 @@ export function PanelApp() {
       }
 
       try {
-        const rows = await listNotes();
-        if (cancelled) return;
-        setNotes(rows);
-        setNotesState("ready");
-        setNotesError(null);
+        await refreshNotes(filterRef.current);
       } catch (err) {
         if (cancelled) return;
         setNotesState("error");
@@ -75,30 +111,38 @@ export function PanelApp() {
 
     let unlisten: (() => void) | undefined;
     void listenDataChanged((payload) => {
-      if (payload.entity === "task") {
+      if (payload.entity === "project") {
         startTransition(() => {
-          void listTasks()
+          void refreshProjects()
             .then((rows) => {
-              setTasks(rows);
-              setTasksState("ready");
-              setTasksError(null);
+              const current = filterRef.current;
+              if (
+                current !== "all" &&
+                current !== "no-project" &&
+                !rows.some((p) => p.id === current)
+              ) {
+                filterRef.current = "all";
+                setFilter("all");
+                storeSetFilter("all");
+              }
             })
             .catch(() => {
               /* ignore */
             });
         });
       }
+      if (payload.entity === "task") {
+        startTransition(() => {
+          void refreshTasks(filterRef.current).catch(() => {
+            /* ignore */
+          });
+        });
+      }
       if (payload.entity === "note") {
         startTransition(() => {
-          void listNotes()
-            .then((rows) => {
-              setNotes(rows);
-              setNotesState("ready");
-              setNotesError(null);
-            })
-            .catch(() => {
-              /* ignore */
-            });
+          void refreshNotes(filterRef.current).catch(() => {
+            /* ignore */
+          });
         });
       }
     }).then((fn) => {
@@ -109,7 +153,30 @@ export function PanelApp() {
       cancelled = true;
       unlisten?.();
     };
-  }, []);
+  }, [refreshNotes, refreshProjects, refreshTasks]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await refreshTasks(filter);
+      } catch (err) {
+        if (cancelled) return;
+        setTasksState("error");
+        setTasksError(err instanceof Error ? err.message : "Chargement impossible");
+      }
+      try {
+        await refreshNotes(filter);
+      } catch (err) {
+        if (cancelled) return;
+        setNotesState("error");
+        setNotesError(err instanceof Error ? err.message : "Chargement impossible");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, refreshNotes, refreshTasks]);
 
   async function toggleOpen() {
     const next = !open;
@@ -168,6 +235,27 @@ export function PanelApp() {
     }
   }
 
+  async function assignTaskProject(task: Task, projectId: string | null) {
+    const previous = tasks;
+    setPendingId(task.id);
+    setTasks((rows) =>
+      rows.map((row) => (row.id === task.id ? { ...row, projectId } : row)),
+    );
+    try {
+      await upsertTask({ ...task, projectId });
+      await refreshTasks(filterRef.current);
+    } catch {
+      setTasks(previous);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  function changeFilter(next: ProjectFilterValue) {
+    setFilter(next);
+    storeSetFilter(next);
+  }
+
   const activeTasks = tasks.filter((t) => t.status === "active");
   const doneTasks = tasks.filter((t) => t.status === "done");
 
@@ -202,6 +290,15 @@ export function PanelApp() {
           </button>
         </section>
 
+        <section className="panel-section">
+          <h2>Vue</h2>
+          <ProjectFilterBar
+            projects={projects}
+            value={filter}
+            onChange={changeFilter}
+          />
+        </section>
+
         <section className="panel-section panel-section-grow">
           <h2>Tâches</h2>
           {tasksState === "loading" && (
@@ -214,9 +311,13 @@ export function PanelApp() {
             <TaskList
               active={activeTasks}
               done={doneTasks}
+              projects={projects}
               showDone={showDone}
               onToggleShowDone={() => setShowDone((v) => !v)}
               onToggleDone={(task) => void toggleTaskDone(task)}
+              onAssignProject={(task, projectId) =>
+                void assignTaskProject(task, projectId)
+              }
               pendingId={pendingId}
             />
           )}
@@ -226,6 +327,7 @@ export function PanelApp() {
           <h2>Notes</h2>
           <NotesPanel
             notes={notes}
+            projects={projects}
             loadState={notesState}
             error={notesError}
           />
@@ -238,6 +340,27 @@ export function PanelApp() {
 
         <section className="panel-section panel-settings">
           <h2>Réglages</h2>
+          <ProjectsManage
+            projects={projects}
+            onChanged={() => {
+              void refreshProjects()
+                .then((rows) => {
+                  if (
+                    filter !== "all" &&
+                    filter !== "no-project" &&
+                    !rows.some((p) => p.id === filter)
+                  ) {
+                    changeFilter("all");
+                  } else {
+                    void refreshTasks(filter);
+                    void refreshNotes(filter);
+                  }
+                })
+                .catch(() => {
+                  /* ignore */
+                });
+            }}
+          />
           <label className="panel-toggle">
             <input
               type="checkbox"

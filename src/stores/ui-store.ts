@@ -51,3 +51,8 @@ export function setPanelAlwaysOnTop(alwaysOnTop: boolean): void {
   state.panelAlwaysOnTop = alwaysOnTop;
   notify();
 }
+
+export function setActiveFilter(filter: UiState["activeFilter"]): void {
+  state.activeFilter = filter;
+  notify();
+}

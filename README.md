@@ -13,8 +13,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 4** : capture rapide (fenêtre légère, Task/Note/Idée, depuis le panneau)
 - **Étape 5** : tâches dans le panneau (liste, cocher/décocher, terminées)
 - **Étape 6** : notes dans le panneau (créer / éditer / lister)
+- **Étape 7** : projets optionnels + filtres Tout / Sans projet / Projet
 
-Pas encore : filtres projets, tray, raccourcis, post-it, timer (étapes 7+).
+Pas encore : post-it, timer, rappels OS, tray, raccourcis (étapes 8+).
 
 ## Prérequis
 

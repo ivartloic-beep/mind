@@ -1,20 +1,25 @@
-import type { Task } from "../../types/models";
+import type { Project, Task } from "../../types/models";
+import { ProjectSelect } from "../projects/ProjectSelect";
 
 type Props = {
   active: Task[];
   done: Task[];
+  projects: Project[];
   showDone: boolean;
   onToggleShowDone: () => void;
   onToggleDone: (task: Task) => void;
+  onAssignProject: (task: Task, projectId: string | null) => void;
   pendingId: string | null;
 };
 
 export function TaskList({
   active,
   done,
+  projects,
   showDone,
   onToggleShowDone,
   onToggleDone,
+  onAssignProject,
   pendingId,
 }: Props) {
   return (
@@ -27,8 +32,10 @@ export function TaskList({
             <TaskRow
               key={task.id}
               task={task}
+              projects={projects}
               pending={pendingId === task.id}
               onToggle={() => onToggleDone(task)}
+              onAssignProject={(projectId) => onAssignProject(task, projectId)}
             />
           ))}
         </ul>
@@ -54,8 +61,10 @@ export function TaskList({
                 <TaskRow
                   key={task.id}
                   task={task}
+                  projects={projects}
                   pending={pendingId === task.id}
                   onToggle={() => onToggleDone(task)}
+                  onAssignProject={(projectId) => onAssignProject(task, projectId)}
                 />
               ))}
             </ul>
@@ -68,12 +77,16 @@ export function TaskList({
 
 function TaskRow({
   task,
+  projects,
   pending,
   onToggle,
+  onAssignProject,
 }: {
   task: Task;
+  projects: Project[];
   pending: boolean;
   onToggle: () => void;
+  onAssignProject: (projectId: string | null) => void;
 }) {
   const done = task.status === "done";
   return (
@@ -90,13 +103,22 @@ function TaskRow({
       </button>
       <div className="task-body">
         <span className="task-title">{task.title}</span>
-        {(task.dueDate || task.priority) && (
-          <span className="task-meta">
-            {task.priority ? task.priority : null}
-            {task.priority && task.dueDate ? " · " : null}
-            {task.dueDate ? formatDue(task.dueDate) : null}
-          </span>
-        )}
+        <div className="task-meta-row">
+          <ProjectSelect
+            projects={projects}
+            value={task.projectId}
+            disabled={pending}
+            onChange={onAssignProject}
+            ariaLabel="Projet de la tâche"
+          />
+          {(task.dueDate || task.priority) && (
+            <span className="task-meta">
+              {task.priority ? task.priority : null}
+              {task.priority && task.dueDate ? " · " : null}
+              {task.dueDate ? formatDue(task.dueDate) : null}
+            </span>
+          )}
+        </div>
       </div>
     </li>
   );
