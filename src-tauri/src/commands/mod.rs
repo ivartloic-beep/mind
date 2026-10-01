@@ -198,7 +198,7 @@ pub fn delete_note(app: AppHandle, state: State<'_, AppState>, id: String) -> Re
     Ok(())
 }
 
-/// Capture rapide → création directe d'une Note (kind note|idea).
+/// Capture rapide / panneau → création directe d'une Note (kind note|idea).
 #[tauri::command]
 pub fn create_note(
     app: AppHandle,
@@ -206,10 +206,15 @@ pub fn create_note(
     body: String,
     kind: NoteKind,
     project_id: Option<String>,
+    title: Option<String>,
 ) -> Result<Note, String> {
     let now = now_iso();
+    let title = title
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
     let note = Note {
         id: new_id(),
+        title,
         body,
         kind,
         project_id,

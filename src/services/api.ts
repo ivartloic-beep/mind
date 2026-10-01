@@ -48,12 +48,19 @@ export const listNotes = (filter?: NoteFilter) =>
 export const getNote = (id: string) => invoke<Note | null>("get_note", { id });
 export const upsertNote = (note: Note) => invoke<Note>("upsert_note", { note });
 export const deleteNote = (id: string) => invoke<void>("delete_note", { id });
-/** Capture → Note directe (note | idea). */
+/** Capture / panneau → Note directe (note | idea). */
 export const createNote = (
   body: string,
   kind: NoteKind,
   projectId?: string | null,
-) => invoke<Note>("create_note", { body, kind, projectId: projectId ?? null });
+  title?: string | null,
+) =>
+  invoke<Note>("create_note", {
+    body,
+    kind,
+    projectId: projectId ?? null,
+    title: title ?? null,
+  });
 
 // Reminders
 export const listReminders = (filter?: ReminderFilter) =>

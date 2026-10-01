@@ -70,6 +70,7 @@ impl LocalStorage {
 
                 CREATE TABLE IF NOT EXISTS notes (
                   id TEXT PRIMARY KEY NOT NULL,
+                  title TEXT,
                   body TEXT NOT NULL,
                   kind TEXT NOT NULL,
                   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
@@ -102,6 +103,7 @@ impl LocalStorage {
                 ",
             )?;
             migrate_tasks_columns(conn)?;
+            migrate_notes_columns(conn)?;
             Ok(())
         })
     }
@@ -144,6 +146,11 @@ fn migrate_tasks_columns(conn: &Connection) -> StorageResult<()> {
         "UPDATE tasks SET done = 0 WHERE status = 'active' AND done != 0",
         [],
     )?;
+    Ok(())
+}
+
+fn migrate_notes_columns(conn: &Connection) -> StorageResult<()> {
+    ensure_column(conn, "notes", "title", "title TEXT")?;
     Ok(())
 }
 
@@ -296,7 +303,7 @@ impl Storage for LocalStorage {
     fn list_notes(&self, filter: &NoteFilter) -> StorageResult<Vec<Note>> {
         self.with_conn(|conn| {
             let mut sql = String::from(
-                "SELECT id, body, kind, project_id, created_at, updated_at FROM notes WHERE 1=1",
+                "SELECT id, title, body, kind, project_id, created_at, updated_at FROM notes WHERE 1=1",
             );
             let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
 
@@ -310,7 +317,7 @@ impl Storage for LocalStorage {
                 sql.push_str(" AND kind = ?");
                 values.push(Box::new(kind.as_str().to_string()));
             }
-            sql.push_str(" ORDER BY created_at DESC");
+            sql.push_str(" ORDER BY updated_at DESC");
 
             let mut stmt = conn.prepare(&sql)?;
             let params_refs: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v.as_ref()).collect();
@@ -323,7 +330,7 @@ impl Storage for LocalStorage {
     fn get_note(&self, id: &str) -> StorageResult<Option<Note>> {
         self.with_conn(|conn| {
             conn.query_row(
-                "SELECT id, body, kind, project_id, created_at, updated_at FROM notes WHERE id = ?1",
+                "SELECT id, title, body, kind, project_id, created_at, updated_at FROM notes WHERE id = ?1",
                 params![id],
                 map_note,
             )
@@ -335,15 +342,17 @@ impl Storage for LocalStorage {
     fn upsert_note(&self, note: &Note) -> StorageResult<()> {
         self.with_conn(|conn| {
             conn.execute(
-                "INSERT INTO notes (id, body, kind, project_id, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+                "INSERT INTO notes (id, title, body, kind, project_id, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                  ON CONFLICT(id) DO UPDATE SET
+                   title = excluded.title,
                    body = excluded.body,
                    kind = excluded.kind,
                    project_id = excluded.project_id,
                    updated_at = excluded.updated_at",
                 params![
                     note.id,
+                    note.title,
                     note.body,
                     note.kind.as_str(),
                     note.project_id,
@@ -519,17 +528,18 @@ fn map_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
 }
 
 fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
-    let kind_raw: String = row.get(2)?;
+    let kind_raw: String = row.get(3)?;
     let kind = NoteKind::parse(&kind_raw).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, e.into())
+        rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, e.into())
     })?;
     Ok(Note {
         id: row.get(0)?,
-        body: row.get(1)?,
+        title: row.get(1)?,
+        body: row.get(2)?,
         kind,
-        project_id: row.get(3)?,
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
+        project_id: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
     })
 }
 
@@ -598,6 +608,7 @@ mod tests {
 
             let note = Note {
                 id: new_id(),
+                title: Some("V2".into()),
                 body: "Idée pour V2".into(),
                 kind: NoteKind::Idea,
                 project_id: None,
@@ -647,6 +658,7 @@ mod tests {
         );
         let note = &db.list_notes(&NoteFilter::default()).unwrap()[0];
         assert_eq!(note.kind, NoteKind::Idea);
+        assert_eq!(note.title.as_deref(), Some("V2"));
         assert!(note.project_id.is_none());
     }
 }

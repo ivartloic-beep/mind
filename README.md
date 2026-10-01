@@ -12,8 +12,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 3** : panneau latéral droit (~400 px), poignée slide, always-on-top mémorisé
 - **Étape 4** : capture rapide (fenêtre légère, Task/Note/Idée, depuis le panneau)
 - **Étape 5** : tâches dans le panneau (liste, cocher/décocher, terminées)
+- **Étape 6** : notes dans le panneau (créer / éditer / lister)
 
-Pas encore : notes UI riche, filtres projets, tray, raccourcis, post-it (étapes 6+).
+Pas encore : filtres projets, tray, raccourcis, post-it, timer (étapes 7+).
 
 ## Prérequis
 

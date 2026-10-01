@@ -30,6 +30,9 @@ export type NoteKind = "note" | "idea";
 
 export type Note = {
   id: string;
+  /** Titre optionnel. */
+  title?: string;
+  /** Contenu libre. */
   body: string;
   kind: NoteKind;
   projectId: string | null;

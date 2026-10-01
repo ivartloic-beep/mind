@@ -1,5 +1,5 @@
 import { useEffect, useState, useTransition } from "react";
-import { listTasks, setTaskDone } from "../../services/api";
+import { listNotes, listTasks, setTaskDone } from "../../services/api";
 import { captureShow } from "../../services/capture";
 import { listenDataChanged } from "../../services/events";
 import {
@@ -11,7 +11,8 @@ import {
   setPanelAlwaysOnTop as storeSetAot,
   setPanelOpen as storeSetOpen,
 } from "../../stores/ui-store";
-import type { Task } from "../../types/models";
+import type { Note, Task } from "../../types/models";
+import { NotesPanel } from "../notes/NotesPanel";
 import { TaskList } from "./TaskList";
 import "./panel.css";
 
@@ -21,8 +22,11 @@ export function PanelApp() {
   const [open, setOpen] = useState(true);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [error, setError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [tasksState, setTasksState] = useState<LoadState>("loading");
+  const [notesState, setNotesState] = useState<LoadState>("loading");
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -46,12 +50,24 @@ export function PanelApp() {
         const rows = await listTasks();
         if (cancelled) return;
         setTasks(rows);
-        setLoadState("ready");
-        setError(null);
+        setTasksState("ready");
+        setTasksError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadState("error");
-        setError(err instanceof Error ? err.message : "Chargement impossible");
+        setTasksState("error");
+        setTasksError(err instanceof Error ? err.message : "Chargement impossible");
+      }
+
+      try {
+        const rows = await listNotes();
+        if (cancelled) return;
+        setNotes(rows);
+        setNotesState("ready");
+        setNotesError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setNotesState("error");
+        setNotesError(err instanceof Error ? err.message : "Chargement impossible");
       }
     }
 
@@ -59,18 +75,32 @@ export function PanelApp() {
 
     let unlisten: (() => void) | undefined;
     void listenDataChanged((payload) => {
-      if (payload.entity !== "task" && payload.entity !== "note") return;
-      startTransition(() => {
-        void listTasks()
-          .then((rows) => {
-            setTasks(rows);
-            setLoadState("ready");
-            setError(null);
-          })
-          .catch(() => {
-            /* ignore refresh errors */
-          });
-      });
+      if (payload.entity === "task") {
+        startTransition(() => {
+          void listTasks()
+            .then((rows) => {
+              setTasks(rows);
+              setTasksState("ready");
+              setTasksError(null);
+            })
+            .catch(() => {
+              /* ignore */
+            });
+        });
+      }
+      if (payload.entity === "note") {
+        startTransition(() => {
+          void listNotes()
+            .then((rows) => {
+              setNotes(rows);
+              setNotesState("ready");
+              setNotesError(null);
+            })
+            .catch(() => {
+              /* ignore */
+            });
+        });
+      }
     }).then((fn) => {
       unlisten = fn;
     });
@@ -174,13 +204,13 @@ export function PanelApp() {
 
         <section className="panel-section panel-section-grow">
           <h2>Tâches</h2>
-          {loadState === "loading" && (
+          {tasksState === "loading" && (
             <p className="panel-muted">Chargement…</p>
           )}
-          {loadState === "error" && (
-            <p className="panel-error">{error ?? "Erreur"}</p>
+          {tasksState === "error" && (
+            <p className="panel-error">{tasksError ?? "Erreur"}</p>
           )}
-          {loadState === "ready" && (
+          {tasksState === "ready" && (
             <TaskList
               active={activeTasks}
               done={doneTasks}
@@ -192,9 +222,13 @@ export function PanelApp() {
           )}
         </section>
 
-        <section className="panel-section">
+        <section className="panel-section panel-section-notes">
           <h2>Notes</h2>
-          <p className="panel-muted">Bientôt — étapes suivantes.</p>
+          <NotesPanel
+            notes={notes}
+            loadState={notesState}
+            error={notesError}
+          />
         </section>
 
         <section className="panel-section">

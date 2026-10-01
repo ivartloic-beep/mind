@@ -115,6 +115,10 @@ impl NoteKind {
 #[serde(rename_all = "camelCase")]
 pub struct Note {
     pub id: String,
+    /// Titre optionnel — projet jamais obligatoire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Contenu libre (pas de duplication avec les Task).
     pub body: String,
     pub kind: NoteKind,
     pub project_id: Option<String>,
