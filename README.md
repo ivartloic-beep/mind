@@ -17,8 +17,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 8** : post-its fenêtres natives (`postit-{id}`), persistés, liés à Note
 - **Étape 9** : minuteur 25/5 (démarrer / pause / notif Windows)
 - **Étape 10** : rappels tâche (🔔, notif Windows, snooze +10 min / +1 h / demain)
+- **Étape 11** : raccourcis globaux CTRL+ALT+N (capture) / CTRL+ALT+Espace (panneau)
 
-Pas encore : tray, raccourcis (étapes 11–12).
+Pas encore : tray / autostart (étape 12).
 
 ## Prérequis
 

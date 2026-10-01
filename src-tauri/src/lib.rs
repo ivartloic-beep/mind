@@ -30,6 +30,7 @@ pub fn run() {
                 eprintln!("postit restore: {err}");
             }
             os::notifications::start_reminder_scheduler(app.handle().clone());
+            os::shortcuts::register_shortcuts(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

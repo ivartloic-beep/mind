@@ -4,7 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 
 pub const PANEL_LABEL: &str = "panel";
 pub const PANEL_CONTENT_WIDTH: f64 = 400.0;
@@ -132,12 +132,14 @@ pub fn panel_set_open(app: AppHandle, open: bool) -> Result<PanelState, String> 
     save_prefs(&app, &prefs)?;
     let window = panel_window(&app)?;
     apply_panel_geometry(&window, open)?;
-    Ok(PanelState {
+    let state = PanelState {
         open: prefs.open,
         always_on_top: prefs.always_on_top,
         content_width: PANEL_CONTENT_WIDTH,
         handle_width: HANDLE_WIDTH,
-    })
+    };
+    let _ = app.emit("panel-state-changed", &state);
+    Ok(state)
 }
 
 #[tauri::command]

@@ -15,6 +15,7 @@ import {
 import { captureShow } from "../../services/capture";
 import {
   listenDataChanged,
+  listenPanelStateChanged,
   listenReminderDue,
   listenReminderOpenTask,
   type ReminderDuePayload,
@@ -188,6 +189,15 @@ export function PanelApp() {
         );
         el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }, 80);
+    }).then((fn) => {
+      unlistens.push(fn);
+    });
+
+    void listenPanelStateChanged((payload) => {
+      setOpen(payload.open);
+      storeSetOpen(payload.open);
+      setAlwaysOnTop(payload.alwaysOnTop);
+      storeSetAot(payload.alwaysOnTop);
     }).then((fn) => {
       unlistens.push(fn);
     });

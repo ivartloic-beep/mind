@@ -48,3 +48,22 @@ export async function listenReminderOpenTask(
   );
   return unlisten;
 }
+
+export type PanelStatePayload = {
+  open: boolean;
+  alwaysOnTop: boolean;
+  contentWidth: number;
+  handleWidth: number;
+};
+
+export async function listenPanelStateChanged(
+  handler: (payload: PanelStatePayload) => void,
+): Promise<() => void> {
+  const unlisten = await listen<PanelStatePayload>(
+    "panel-state-changed",
+    (event) => {
+      handler(event.payload);
+    },
+  );
+  return unlisten;
+}
