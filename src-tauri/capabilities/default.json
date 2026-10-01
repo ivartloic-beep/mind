@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities for Ma Tête windows (étape 1)",
+  "windows": ["main", "panel", "capture", "postit"],
+  "permissions": [
+    "core:default"
+  ]
+}
