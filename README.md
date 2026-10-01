@@ -14,8 +14,9 @@ Nom provisoire : **Ma Tête**.
 - **Étape 5** : tâches dans le panneau (liste, cocher/décocher, terminées)
 - **Étape 6** : notes dans le panneau (créer / éditer / lister)
 - **Étape 7** : projets optionnels + filtres Tout / Sans projet / Projet
+- **Étape 8** : post-its fenêtres natives (`postit-{id}`), persistés, liés à Note
 
-Pas encore : post-it, timer, rappels OS, tray, raccourcis (étapes 8+).
+Pas encore : timer, rappels OS, tray, raccourcis (étapes 9+).
 
 ## Prérequis
 

@@ -25,6 +25,9 @@ pub fn run() {
             if let Err(err) = windows::capture::init_capture(app.handle()) {
                 eprintln!("capture init: {err}");
             }
+            if let Err(err) = windows::postit::restore_open_postits(app.handle()) {
+                eprintln!("postit restore: {err}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -58,6 +61,10 @@ pub fn run() {
             windows::panel::panel_redock,
             windows::capture::capture_show,
             windows::capture::capture_hide,
+            windows::postit::postit_open_for_note,
+            windows::postit::postit_close,
+            windows::postit::postit_update_geometry,
+            windows::postit::postit_set_always_on_top,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

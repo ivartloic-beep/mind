@@ -46,16 +46,6 @@
         "alwaysOnTop": true,
         "focus": false,
         "center": true
-      },
-      {
-        "label": "postit",
-        "title": "Ma Tête — Post-it",
-        "url": "postit.html",
-        "width": 280,
-        "height": 220,
-        "visible": false,
-        "resizable": true,
-        "alwaysOnTop": true
       }
     ],
     "security": {

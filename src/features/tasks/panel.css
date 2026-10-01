@@ -456,7 +456,8 @@
 
 .notes-new-btn,
 .notes-save-btn,
-.notes-cancel-btn {
+.notes-cancel-btn,
+.notes-postit-btn {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
@@ -466,6 +467,11 @@
   font: inherit;
   font-size: 0.8rem;
   cursor: pointer;
+}
+
+.notes-postit-btn {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  color: var(--accent);
 }
 
 .notes-new-btn:hover,
