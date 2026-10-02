@@ -1,8 +1,10 @@
 /**
- * Minuteur durée libre — démarrer / pause / +5 min à la fin.
+ * Minuteur compact — durée/son/boutons sur une ligne ;
+ * fin : overlay panneau + OK / Reporter.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import {
   isPermissionGranted,
@@ -14,6 +16,13 @@ import "./timer.css";
 type Status = "idle" | "running" | "paused" | "finished";
 
 const STORAGE_KEY = "ma-tete.timer.prefs";
+
+const SNOOZE_PRESETS = [
+  { label: "5 min", minutes: 5 },
+  { label: "15 min", minutes: 15 },
+  { label: "30 min", minutes: 30 },
+  { label: "1 h", minutes: 60 },
+] as const;
 
 type Prefs = {
   minutes: number;
@@ -102,6 +111,10 @@ export function TimerPanel() {
   const [soundEnabled, setSoundEnabled] = useState(initial.soundEnabled);
   const [status, setStatus] = useState<Status>("idle");
   const [remaining, setRemaining] = useState(initial.minutes * 60);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState(10);
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const soundRef = useRef(soundEnabled);
   const statusRef = useRef(status);
   const remainingRef = useRef(remaining);
@@ -112,6 +125,10 @@ export function TimerPanel() {
   useEffect(() => {
     savePrefs({ minutes, soundEnabled });
   }, [minutes, soundEnabled]);
+
+  useEffect(() => {
+    setPortalHost(document.querySelector(".panel-body"));
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -131,6 +148,8 @@ export function TimerPanel() {
       if (prev === "finished" || remainingRef.current <= 0) {
         setRemaining(minutes * 60);
       }
+      setSnoozeOpen(false);
+      setCustomOpen(false);
       setStatus("running");
     }).then((fn) => {
       unlisten = fn;
@@ -145,6 +164,8 @@ export function TimerPanel() {
         if (prev <= 1) {
           window.clearInterval(id);
           setStatus("finished");
+          setSnoozeOpen(false);
+          setCustomOpen(false);
           void notifyDone();
           if (soundRef.current) playBeep();
           return 0;
@@ -167,6 +188,8 @@ export function TimerPanel() {
     if (status === "finished" || remaining <= 0) {
       setRemaining(minutes * 60);
     }
+    setSnoozeOpen(false);
+    setCustomOpen(false);
     setStatus("running");
   }
 
@@ -180,85 +203,185 @@ export function TimerPanel() {
 
   function stop() {
     setStatus("idle");
+    setSnoozeOpen(false);
+    setCustomOpen(false);
     setRemaining(minutes * 60);
   }
 
-  function addFiveMinutes() {
-    setRemaining((prev) => prev + 5 * 60);
+  function acknowledgeFinished() {
+    setStatus("idle");
+    setSnoozeOpen(false);
+    setCustomOpen(false);
+    setRemaining(minutes * 60);
+  }
+
+  function snoozeMinutes(mins: number) {
+    const m = clampMinutes(mins);
+    setRemaining(m * 60);
+    setSnoozeOpen(false);
+    setCustomOpen(false);
     setStatus("running");
   }
 
+  const finishOverlay =
+    status === "finished" && portalHost
+      ? createPortal(
+          <div className="timer-finish-overlay" role="alertdialog" aria-modal="true">
+            <div className="timer-finish-card">
+              <p className="timer-finish-title">Fin du minuteur</p>
+              {!snoozeOpen ? (
+                <div className="timer-finish-actions">
+                  <button
+                    type="button"
+                    className="timer-btn is-primary"
+                    onClick={acknowledgeFinished}
+                  >
+                    OK
+                  </button>
+                  <button
+                    type="button"
+                    className="timer-btn"
+                    onClick={() => {
+                      setSnoozeOpen(true);
+                      setCustomOpen(false);
+                    }}
+                  >
+                    Reporter
+                  </button>
+                </div>
+              ) : (
+                <div className="timer-snooze">
+                  <p className="timer-snooze-label">Reporter de</p>
+                  <div className="timer-snooze-presets">
+                    {SNOOZE_PRESETS.map((p) => (
+                      <button
+                        key={p.minutes}
+                        type="button"
+                        className="timer-btn"
+                        onClick={() => snoozeMinutes(p.minutes)}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className={`timer-btn ${customOpen ? "is-primary" : ""}`}
+                      onClick={() => setCustomOpen((v) => !v)}
+                    >
+                      Perso…
+                    </button>
+                  </div>
+                  {customOpen && (
+                    <div className="timer-snooze-custom">
+                      <input
+                        type="number"
+                        min={1}
+                        max={180}
+                        value={customMinutes}
+                        onChange={(e) =>
+                          setCustomMinutes(clampMinutes(Number(e.target.value)))
+                        }
+                      />
+                      <span>min</span>
+                      <button
+                        type="button"
+                        className="timer-btn is-primary"
+                        onClick={() => snoozeMinutes(customMinutes)}
+                      >
+                        OK
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="timer-link"
+                    onClick={() => {
+                      setSnoozeOpen(false);
+                      setCustomOpen(false);
+                    }}
+                  >
+                    Retour
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>,
+          portalHost,
+        )
+      : null;
+
   return (
-    <div className={`timer-panel ${status === "finished" ? "is-finished" : ""}`}>
-      <div className="timer-display" aria-live="polite">
-        <span className="timer-clock">⏱ {formatMmSs(remaining)}</span>
-        <span className="timer-mode">
-          {status === "finished"
-            ? "Terminé"
-            : status === "running"
+    <>
+      <div className="timer-panel">
+        <div className="timer-display" aria-live="polite">
+          <span className="timer-clock">⏱ {formatMmSs(remaining)}</span>
+          <span className="timer-mode">
+            {status === "running"
               ? "En cours"
               : status === "paused"
                 ? "En pause"
-                : "Prêt"}
-        </span>
-      </div>
+                : status === "finished"
+                  ? "Terminé"
+                  : "Prêt"}
+          </span>
+        </div>
 
-      <div className="timer-controls">
-        {status === "running" ? (
-          <button type="button" className="timer-btn" onClick={pause}>
-            Pause
-          </button>
-        ) : status === "paused" ? (
-          <button type="button" className="timer-btn is-primary" onClick={resume}>
-            Reprendre
-          </button>
-        ) : (
-          <button type="button" className="timer-btn is-primary" onClick={start}>
-            Démarrer
-          </button>
-        )}
-        <button
-          type="button"
-          className="timer-btn"
-          onClick={stop}
-          disabled={status === "idle"}
-        >
-          Arrêter
-        </button>
-        {status === "finished" && (
+        <div className="timer-toolbar">
+          <label className="timer-duration">
+            <span>Durée</span>
+            <input
+              type="number"
+              min={1}
+              max={180}
+              value={minutes}
+              disabled={status === "running" || status === "paused"}
+              onChange={(e) => applyMinutes(Number(e.target.value))}
+            />
+            <span>min</span>
+          </label>
+
+          <label className="timer-sound" title="Son à la fin">
+            <input
+              type="checkbox"
+              checked={soundEnabled}
+              onChange={(e) => setSoundEnabled(e.target.checked)}
+            />
+            <span>Son</span>
+          </label>
+
+          {status === "running" ? (
+            <button type="button" className="timer-btn" onClick={pause}>
+              Pause
+            </button>
+          ) : status === "paused" ? (
+            <button
+              type="button"
+              className="timer-btn is-primary"
+              onClick={resume}
+            >
+              Reprendre
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="timer-btn is-primary"
+              onClick={start}
+              disabled={status === "finished"}
+            >
+              Démarrer
+            </button>
+          )}
           <button
             type="button"
-            className="timer-btn is-primary"
-            onClick={addFiveMinutes}
+            className="timer-btn"
+            onClick={stop}
+            disabled={status === "idle" || status === "finished"}
           >
-            +5 min
+            Arrêter
           </button>
-        )}
+        </div>
       </div>
-
-      <div className="timer-durations">
-        <label>
-          Durée
-          <input
-            type="number"
-            min={1}
-            max={180}
-            value={minutes}
-            disabled={status === "running" || status === "paused"}
-            onChange={(e) => applyMinutes(Number(e.target.value))}
-          />
-          <span>min</span>
-        </label>
-      </div>
-
-      <label className="timer-sound">
-        <input
-          type="checkbox"
-          checked={soundEnabled}
-          onChange={(e) => setSoundEnabled(e.target.checked)}
-        />
-        <span>Son à la fin</span>
-      </label>
-    </div>
+      {finishOverlay}
+    </>
   );
 }

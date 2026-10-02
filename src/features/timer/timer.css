@@ -1,74 +1,157 @@
 .timer-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-}
-
-.timer-panel.is-finished .timer-display {
-  animation: timer-pulse 1s ease-in-out 3;
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  gap: 0.35rem;
 }
 
 .timer-display {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .timer-clock {
-  font-size: 1.45rem;
+  font-size: 1.15rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .timer-mode {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }
 
-.timer-controls,
-.timer-modes,
-.timer-durations {
+.timer-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
   align-items: center;
+  gap: 0.35rem 0.45rem;
 }
 
-.timer-btn,
-.timer-chip {
+.timer-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.timer-duration input {
+  width: 2.8rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  padding: 0.18rem 0.25rem;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.timer-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  user-select: none;
+  margin-right: 0.15rem;
+}
+
+.timer-sound input {
+  accent-color: var(--accent);
+}
+
+.timer-btn {
   appearance: none;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--fg);
   border-radius: 6px;
-  padding: 0.3rem 0.55rem;
+  padding: 0.28rem 0.5rem;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   cursor: pointer;
 }
 
-.timer-btn.is-primary,
-.timer-chip.is-active {
+.timer-btn.is-primary {
   border-color: var(--accent);
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.timer-btn:disabled,
-.timer-chip:disabled {
+.timer-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.timer-durations label {
+.timer-finish-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: color-mix(in srgb, var(--bg) 35%, rgba(20, 22, 28, 0.72));
+  backdrop-filter: blur(2px);
+}
+
+.timer-finish-card {
+  width: min(100%, 16.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.15rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  text-align: center;
+}
+
+.timer-finish-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.timer-finish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.timer-snooze {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.timer-snooze-label {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.timer-snooze-presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.timer-snooze-custom {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -76,8 +159,8 @@
   color: var(--muted);
 }
 
-.timer-durations input {
-  width: 3.4rem;
+.timer-snooze-custom input {
+  width: 3rem;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: transparent;
@@ -87,25 +170,13 @@
   font-size: 0.8rem;
 }
 
-.timer-sound {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  user-select: none;
-}
-
-.timer-sound input {
-  accent-color: var(--accent);
-}
-
-@keyframes timer-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.02);
-  }
+.timer-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
 }
