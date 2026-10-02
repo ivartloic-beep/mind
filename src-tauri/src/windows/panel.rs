@@ -8,7 +8,12 @@ use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWi
 
 pub const PANEL_LABEL: &str = "panel";
 pub const PANEL_CONTENT_WIDTH: f64 = 400.0;
+/// Bandeau gauche du panneau ouvert (fermer).
 pub const HANDLE_WIDTH: f64 = 28.0;
+/// Onglet flottant coin haut-droit quand le panneau est fermé.
+pub const CLOSED_TAB_W: f64 = 40.0;
+pub const CLOSED_TAB_H: f64 = 40.0;
+pub const CLOSED_TAB_MARGIN: f64 = 12.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,18 +87,26 @@ fn work_area_logical(window: &WebviewWindow) -> Result<(f64, f64, f64, f64), Str
 
 pub fn apply_panel_geometry(window: &WebviewWindow, open: bool) -> Result<(), String> {
     let (wx, wy, ww, wh) = work_area_logical(window)?;
-    let width = if open {
-        PANEL_CONTENT_WIDTH
+    if open {
+        let width = PANEL_CONTENT_WIDTH;
+        let x = wx + ww - width;
+        window
+            .set_size(LogicalSize::new(width, wh))
+            .map_err(|e| e.to_string())?;
+        window
+            .set_position(LogicalPosition::new(x, wy))
+            .map_err(|e| e.to_string())?;
     } else {
-        HANDLE_WIDTH
-    };
-    let x = wx + ww - width;
-    window
-        .set_size(LogicalSize::new(width, wh))
-        .map_err(|e| e.to_string())?;
-    window
-        .set_position(LogicalPosition::new(x, wy))
-        .map_err(|e| e.to_string())?;
+        // Petite flèche flottante en haut à droite (plus de barre pleine hauteur).
+        let x = wx + ww - CLOSED_TAB_W - CLOSED_TAB_MARGIN;
+        let y = wy + CLOSED_TAB_MARGIN;
+        window
+            .set_size(LogicalSize::new(CLOSED_TAB_W, CLOSED_TAB_H))
+            .map_err(|e| e.to_string())?;
+        window
+            .set_position(LogicalPosition::new(x, y))
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -108,6 +121,7 @@ pub fn init_panel(app: &AppHandle, background: bool) -> Result<(), String> {
     let _ = window.set_decorations(false);
     let _ = window.set_resizable(false);
     let _ = window.set_skip_taskbar(true);
+    let _ = window.set_shadow(false);
     window
         .set_always_on_top(prefs.always_on_top)
         .map_err(|e| e.to_string())?;

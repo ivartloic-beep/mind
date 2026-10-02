@@ -31,7 +31,7 @@
         "decorations": false,
         "skipTaskbar": true,
         "alwaysOnTop": false,
-        "transparent": false
+        "transparent": true
       },
       {
         "label": "capture",
