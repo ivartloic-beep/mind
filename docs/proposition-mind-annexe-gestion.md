@@ -189,18 +189,18 @@ Aéré : beaucoup d’air, **3 tâches max visibles**, pas de notes ici, pas de 
 
 ## 7. Phasage proposé
 
-### Phase A — Panneau « annexe » (layout)
+### Phase A — Panneau « annexe » (layout) — **livré**
 
-- Repasser le panneau en **3 modes** sans scroll.
+- Panneau en **3 modes** (Jour / Capturer / Minuteur).
 - File du jour (≤4 tâches) avec chips.
-- Rangée 4 deep-links Gestion.
+- Rangée 4 deep-links Gestion (Capturer / Bureau / CRM / Projets).
 - Minuteur isolé dans son mode.
 
-### Phase B — Déposer
+### Phase B — Déposer — **livré V1**
 
-- Drop zone + feuille destination (Bureau / Projet / Tâche).
-- Upload workspace ou PJ tâche.
-- Sync visible (toast discret « Déposé dans … »).
+- Drop zone + feuille destination (Bureau / Projet).
+- Upload workspace (`workspace_upload.php`).
+- Message discret « Déposé dans … ».
 
 ### Phase C — CRM express
 
