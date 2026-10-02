@@ -79,6 +79,39 @@
   gap: 0.6rem;
 }
 
+.capture-project-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.capture-project-label {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.capture-project-hint {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.capture-project-row .project-assign-select {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  max-width: 12rem;
+  min-width: 0;
+}
+
 .capture-kinds {
   display: flex;
   gap: 0.3rem;

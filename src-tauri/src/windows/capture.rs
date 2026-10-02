@@ -5,7 +5,8 @@ use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWi
 
 pub const CAPTURE_LABEL: &str = "capture";
 const CAPTURE_WIDTH: f64 = 440.0;
-const CAPTURE_HEIGHT: f64 = 200.0;
+/// Place pour type + projet optionnel sur les tâches.
+const CAPTURE_HEIGHT: f64 = 236.0;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

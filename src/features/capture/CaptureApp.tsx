@@ -5,8 +5,10 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createNote, createTask } from "../../services/api";
+import { createNote, createTask, listProjects } from "../../services/api";
 import { captureHide } from "../../services/capture";
+import type { Project } from "../../types/models";
+import { ProjectSelect } from "../projects/ProjectSelect";
 import "./capture.css";
 
 type CaptureKind = "task" | "note" | "idea";
@@ -18,6 +20,8 @@ function inTauri(): boolean {
 export function CaptureApp() {
   const [text, setText] = useState("");
   const [kind, setKind] = useState<CaptureKind>("task");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -37,16 +41,27 @@ export function CaptureApp() {
   function resetDraft() {
     setText("");
     setKind("task");
+    setProjectId(null);
     setError(null);
     setBusy(false);
     window.setTimeout(() => inputRef.current?.focus(), 30);
   }
 
+  async function refreshProjects() {
+    try {
+      setProjects(await listProjects());
+    } catch {
+      /* hors Tauri / ignore */
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     const unsubs: Array<() => void> = [];
+    let blurTimer: number | null = null;
 
     async function wire() {
+      await refreshProjects();
       if (!inTauri()) {
         inputRef.current?.focus();
         return;
@@ -56,6 +71,7 @@ export function CaptureApp() {
         "capture-opened",
         (event) => {
           if (cancelled) return;
+          void refreshProjects();
           if (event.payload.clear) {
             resetDraft();
             if (
@@ -73,10 +89,20 @@ export function CaptureApp() {
       unsubs.push(unOpened);
 
       const win = getCurrentWindow();
+      // Délai : le <select> projet fait perdre le focus sous Windows.
       const unFocus = await win.onFocusChanged(({ payload: focused }) => {
-        if (!focused && !busyRef.current) {
-          void closeCapture();
+        if (focused) {
+          if (blurTimer !== null) {
+            window.clearTimeout(blurTimer);
+            blurTimer = null;
+          }
+          return;
         }
+        if (busyRef.current) return;
+        blurTimer = window.setTimeout(() => {
+          blurTimer = null;
+          if (!busyRef.current) void closeCapture();
+        }, 280);
       });
       unsubs.push(unFocus);
     }
@@ -84,6 +110,7 @@ export function CaptureApp() {
     void wire();
     return () => {
       cancelled = true;
+      if (blurTimer !== null) window.clearTimeout(blurTimer);
       for (const u of unsubs) u();
     };
   }, []);
@@ -107,11 +134,12 @@ export function CaptureApp() {
     setError(null);
     try {
       if (kind === "task") {
-        await createTask(value, null);
+        await createTask(value, projectId);
       } else {
-        await createNote(value, kind, null);
+        await createNote(value, kind, projectId);
       }
       setText("");
+      setProjectId(null);
       await closeCapture();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Échec de la capture");
@@ -187,6 +215,19 @@ export function CaptureApp() {
           {busy ? "…" : "Entrée"}
         </button>
       </div>
+      {kind === "task" && (
+        <div className="capture-project-row">
+          <span className="capture-project-label">Projet</span>
+          <ProjectSelect
+            projects={projects}
+            value={projectId}
+            disabled={busy}
+            onChange={setProjectId}
+            ariaLabel="Projet de la tâche (optionnel)"
+          />
+          <span className="capture-project-hint">optionnel</span>
+        </div>
+      )}
       <p className="capture-hint">Échap ou ✕ pour fermer sans créer</p>
       {error && <p className="capture-error">{error}</p>}
     </main>
