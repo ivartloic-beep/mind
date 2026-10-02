@@ -71,6 +71,17 @@ pub fn capture_show(app: AppHandle) -> Result<(), String> {
     capture_show_kind(app, None)
 }
 
+/// Ouvre la capture avec un type pré-sélectionné (`task` | `note` | `idea`).
+#[tauri::command]
+pub fn capture_show_with_kind(app: AppHandle, kind: Option<String>) -> Result<(), String> {
+    let normalized = kind
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| matches!(*s, "task" | "note" | "idea"))
+        .map(|s| s.to_string());
+    capture_show_kind(app, normalized)
+}
+
 /// Ouvre la capture, optionnellement pré-sélectionne le type (task|note|idea).
 pub fn capture_show_kind(app: AppHandle, kind: Option<String>) -> Result<(), String> {
     let window = capture_window(&app)?;

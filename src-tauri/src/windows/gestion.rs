@@ -310,6 +310,52 @@ pub async fn gestion_upload_file(
     })
 }
 
+/// Ouvre Gestion sur une page (bureau | crm | projects).
+#[tauri::command]
+pub fn gestion_show_page(app: AppHandle, page: String) -> Result<(), String> {
+    let page = page.trim().to_ascii_lowercase();
+    let fn_name = match page.as_str() {
+        "bureau" => "openMyBureauPage",
+        "crm" => "openCrmPage",
+        "projects" | "projets" | "production" => "openWorkProjectsListPage",
+        _ => {
+            return Err(
+                "page Gestion inconnue (bureau, crm, projects)".into(),
+            )
+        }
+    };
+    show_gestion(&app)?;
+    let window = app
+        .get_webview_window(GESTION_LABEL)
+        .ok_or_else(|| "fenêtre Gestion introuvable".to_string())?;
+    let js = format!(
+        r#"(function(){{
+  var fn = '{fn}';
+  function tryOpen(n) {{
+    try {{
+      if (typeof window[fn] === 'function') {{
+        window[fn]();
+        return;
+      }}
+    }} catch (e) {{}}
+    if (n < 48) setTimeout(function(){{ tryOpen(n + 1); }}, 250);
+  }}
+  tryOpen(0);
+}})();"#,
+        fn = fn_name
+    );
+    let win = window.clone();
+    let js2 = js.clone();
+    let _ = window.eval(&js);
+    std::thread::spawn(move || {
+        for delay in [400u64, 1000, 2000, 3500] {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            let _ = win.eval(&js2);
+        }
+    });
+    Ok(())
+}
+
 /// Ouvre Gestion sur la fiche tâche (documents, notes, activités… comme le bureau).
 #[tauri::command]
 pub fn gestion_show_task(app: AppHandle, task_id: String) -> Result<(), String> {

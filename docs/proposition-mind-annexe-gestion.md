@@ -230,8 +230,8 @@ Aéré : beaucoup d’air, **3 tâches max visibles**, pas de notes ici, pas de 
 Enchaîner **Phase A puis B** : c’est ce qui transforme MIND en vraie annexe sans alourdir.  
 CRM express (C) ensuite — fort gain, mais secondaire au flux fichiers + tâches déjà amorcé.
 
-À valider avec toi avant code :
+Validé (2026-10-02) :
 
-1. OK pour **retirer les notes** de la file panneau (gardées en Capture / Bibliothèque / Bureau) ?  
-2. OK pour **3 modes** (Jour / Capturer / Minuteur) plutôt que tout empiler ?  
-3. Destinations drop V1 : **Bureau + Projet** seulement, ou aussi **PJ sur une tâche** ?
+1. **Notes hors file panneau** — oui (Capture / Bibliothèque / Bureau).  
+2. **3 modes** Jour / Capturer / Minuteur — oui.  
+3. Drop V1 : **Bureau + Projet** seulement (PJ tâche plus tard).

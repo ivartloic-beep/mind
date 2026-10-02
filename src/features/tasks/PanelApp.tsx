@@ -18,7 +18,7 @@ import {
   snoozeReminder,
   type SnoozeKind,
 } from "../../services/api";
-import { captureShow } from "../../services/capture";
+import { captureShow, captureShowKind } from "../../services/capture";
 import {
   listenDataChanged,
   listenPanelFocusSettings,
@@ -33,7 +33,7 @@ import {
   gestionLogout,
   gestionMigrateLocalTasks,
   gestionSetConfig,
-  gestionShow,
+  gestionShowPage,
   gestionShowTask,
   gestionSyncNow,
   isGestionLoggedIn,
@@ -52,7 +52,6 @@ import {
   panelSetAlwaysOnTop,
   panelSetOpen,
 } from "../../services/panel";
-import { createScratchPostit } from "../../services/postit";
 import {
   listShortcuts,
   type ShortcutInfo,
@@ -76,6 +75,7 @@ import { TimerPanel } from "../timer/TimerPanel";
 import "./panel.css";
 
 type LoadState = "loading" | "ready" | "error";
+type PanelMode = "day" | "capture" | "timer";
 
 export function PanelApp() {
   const [open, setOpen] = useState(true);
@@ -108,9 +108,12 @@ export function PanelApp() {
   const [gestionMsg, setGestionMsg] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloudEdit, setCloudEdit] = useState(false);
+  const [panelMode, setPanelMode] = useState<PanelMode>("day");
+  const [showDropInCapture, setShowDropInCapture] = useState(false);
   const [, startTransition] = useTransition();
   const gestionLoggedInRef = useRef(false);
   const dayQueue = pickDayQueue(tasks, 4);
+  const linkedTimerTask = dayQueue[0] ?? null;
 
   const refresh = useCallback(async () => {
     const taskRows = await listTasks();
@@ -622,7 +625,7 @@ export function PanelApp() {
                   type="button"
                   className="panel-action-btn"
                   disabled={gestionBusy}
-                  onClick={() => void gestionShow()}
+                  onClick={() => void gestionShowPage("bureau")}
                 >
                   Ouvrir Gestion
                 </button>
@@ -874,154 +877,271 @@ export function PanelApp() {
               />
             )}
 
-            <section className="panel-section">
-              <h2>Actions</h2>
-              <div className="panel-actions">
+            <section className="panel-section" aria-label="Raccourcis Gestion">
+              <div className="panel-deep-links">
                 <button
                   type="button"
                   className="panel-action-btn is-primary"
-                  onClick={() => void captureShow()}
+                  onClick={() => {
+                    setPanelMode("capture");
+                    setShowDropInCapture(false);
+                    void captureShow();
+                  }}
                 >
                   Capturer
                 </button>
                 <button
                   type="button"
                   className="panel-action-btn"
-                  onClick={() => void createScratchPostit()}
+                  onClick={() => void gestionShowPage("bureau")}
                 >
-                  Post-it
+                  Bureau
                 </button>
                 <button
                   type="button"
                   className="panel-action-btn"
-                  onClick={() => void libraryShow()}
+                  onClick={() => void gestionShowPage("crm")}
                 >
-                  Bibliothèque
+                  CRM
                 </button>
                 <button
                   type="button"
-                  className="panel-action-btn is-primary"
-                  onClick={() => void gestionShow()}
+                  className="panel-action-btn"
+                  onClick={() => void gestionShowPage("projects")}
                 >
-                  Gestion
+                  Projets
                 </button>
               </div>
             </section>
 
-            <section className="panel-section panel-section-grow">
-              <div className="panel-section-head">
-                <h2>File du jour</h2>
-                <button
-                  type="button"
-                  className="panel-link-btn"
-                  onClick={() => void libraryShow()}
-                >
-                  Voir tout
-                </button>
-              </div>
+            {panelMode === "day" && (
+              <>
+                <section className="panel-section panel-section-grow">
+                  <div className="panel-section-head">
+                    <h2>Aujourd’hui</h2>
+                    <button
+                      type="button"
+                      className="panel-link-btn"
+                      onClick={() => void libraryShow()}
+                    >
+                      Voir tout
+                    </button>
+                  </div>
 
-              {loadState === "loading" && (
-                <p className="panel-muted">Chargement…</p>
-              )}
-              {loadState === "error" && (
-                <p className="panel-error">{loadError ?? "Erreur"}</p>
-              )}
-              {loadState === "ready" && (
-                <>
-                  {dayQueue.length === 0 ? (
-                    <p className="panel-muted">Rien d’urgent pour aujourd’hui.</p>
-                  ) : (
-                    <ul className="panel-recent-list">
-                      {dayQueue.map((task) => {
-                        const prio = formatTaskPriority(task.priority);
-                        const due = formatTaskDue(task.dueDate);
-                        return (
-                          <li
-                            key={task.id}
-                            className="panel-recent-item is-task"
-                            data-task-id={task.id}
-                          >
-                            <button
-                              type="button"
-                              className="panel-recent-check"
-                              disabled={pendingId === task.id}
-                              aria-label="Terminer"
-                              onClick={() => void toggleTaskDone(task)}
-                            >
-                              ○
-                            </button>
-                            <div className="panel-recent-main">
-                              <button
-                                type="button"
-                                className="panel-recent-title-btn"
-                                disabled={pendingId === task.id}
-                                title="Ouvrir la fiche Gestion"
-                                onClick={() => void gestionShowTask(task.id)}
-                              >
-                                {task.title}
-                              </button>
-                              <div className="panel-recent-attrs" aria-label="Attributs">
-                                <span
-                                  className={`task-chip status ${statusClass(task.status)}`}
-                                >
-                                  {formatTaskStatus(task.status)}
-                                </span>
-                                {prio && (
-                                  <span
-                                    className={`task-chip priority ${priorityClass(task.priority)}`}
-                                  >
-                                    {prio}
-                                  </span>
-                                )}
-                                {due && <span className="task-chip due">{due}</span>}
-                                {task.category?.trim() ? (
-                                  <span className="task-chip category">
-                                    {task.category.trim()}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className={`panel-recent-bell ${task.reminder ? "has-reminder" : ""}`}
-                              disabled={pendingId === task.id}
-                              title={
-                                task.reminder
-                                  ? "Retirer le rappel"
-                                  : "Rappel +10 min"
-                              }
-                              onClick={() => void quickRemind(task)}
-                            >
-                              🔔
-                            </button>
-                            <button
-                              type="button"
-                              className="item-delete-btn"
-                              disabled={pendingId === task.id}
-                              aria-label="Supprimer la tâche"
-                              title="Supprimer"
-                              onClick={() => void removeTask(task)}
-                            >
-                              ×
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                  {loadState === "loading" && (
+                    <p className="panel-muted">Chargement…</p>
                   )}
-                </>
-              )}
-            </section>
+                  {loadState === "error" && (
+                    <p className="panel-error">{loadError ?? "Erreur"}</p>
+                  )}
+                  {loadState === "ready" && (
+                    <>
+                      {dayQueue.length === 0 ? (
+                        <p className="panel-muted">
+                          Rien d’urgent pour aujourd’hui.
+                        </p>
+                      ) : (
+                        <ul className="panel-recent-list">
+                          {dayQueue.map((task) => {
+                            const prio = formatTaskPriority(task.priority);
+                            const due = formatTaskDue(task.dueDate);
+                            return (
+                              <li
+                                key={task.id}
+                                className="panel-recent-item is-task"
+                                data-task-id={task.id}
+                              >
+                                <button
+                                  type="button"
+                                  className="panel-recent-check"
+                                  disabled={pendingId === task.id}
+                                  aria-label="Terminer"
+                                  onClick={() => void toggleTaskDone(task)}
+                                >
+                                  ○
+                                </button>
+                                <div className="panel-recent-main">
+                                  <button
+                                    type="button"
+                                    className="panel-recent-title-btn"
+                                    disabled={pendingId === task.id}
+                                    title="Ouvrir la fiche Gestion"
+                                    onClick={() => void gestionShowTask(task.id)}
+                                  >
+                                    {task.title}
+                                  </button>
+                                  <div
+                                    className="panel-recent-attrs"
+                                    aria-label="Attributs"
+                                  >
+                                    <span
+                                      className={`task-chip status ${statusClass(task.status)}`}
+                                    >
+                                      {formatTaskStatus(task.status)}
+                                    </span>
+                                    {prio && (
+                                      <span
+                                        className={`task-chip priority ${priorityClass(task.priority)}`}
+                                      >
+                                        {prio}
+                                      </span>
+                                    )}
+                                    {due && (
+                                      <span className="task-chip due">{due}</span>
+                                    )}
+                                    {task.category?.trim() ? (
+                                      <span className="task-chip category">
+                                        {task.category.trim()}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className={`panel-recent-bell ${task.reminder ? "has-reminder" : ""}`}
+                                  disabled={pendingId === task.id}
+                                  title={
+                                    task.reminder
+                                      ? "Retirer le rappel"
+                                      : "Rappel +10 min"
+                                  }
+                                  onClick={() => void quickRemind(task)}
+                                >
+                                  🔔
+                                </button>
+                                <button
+                                  type="button"
+                                  className="item-delete-btn"
+                                  disabled={pendingId === task.id}
+                                  aria-label="Supprimer la tâche"
+                                  title="Supprimer"
+                                  onClick={() => void removeTask(task)}
+                                >
+                                  ×
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </section>
 
-            <DropZone
-              loggedIn={gestionLoggedIn}
-              onNeedLogin={() => setSettingsOpen(true)}
-            />
+                <DropZone
+                  loggedIn={gestionLoggedIn}
+                  onNeedLogin={() => setSettingsOpen(true)}
+                />
+              </>
+            )}
 
-            <section className="panel-section">
-              <h2>Minuteur</h2>
-              <TimerPanel />
-            </section>
+            {panelMode === "capture" && (
+              <section className="panel-section panel-section-grow panel-capture-mode">
+                <h2>Capturer</h2>
+                <p className="panel-muted">
+                  Choisis un type — la fenêtre Capture s’ouvre.
+                </p>
+                <div className="panel-capture-grid" role="group" aria-label="Type">
+                  <button
+                    type="button"
+                    className="panel-action-btn is-primary"
+                    onClick={() => {
+                      setShowDropInCapture(false);
+                      void captureShowKind("task");
+                    }}
+                  >
+                    Tâche
+                  </button>
+                  <button
+                    type="button"
+                    className="panel-action-btn"
+                    onClick={() => {
+                      setShowDropInCapture(false);
+                      void captureShowKind("note");
+                    }}
+                  >
+                    Note
+                  </button>
+                  <button
+                    type="button"
+                    className="panel-action-btn"
+                    onClick={() => {
+                      setShowDropInCapture(false);
+                      void captureShowKind("idea");
+                    }}
+                  >
+                    Idée
+                  </button>
+                  <button
+                    type="button"
+                    className="panel-action-btn"
+                    onClick={() => {
+                      setShowDropInCapture(false);
+                      void gestionShowPage("crm");
+                    }}
+                  >
+                    Contact
+                  </button>
+                  <button
+                    type="button"
+                    className="panel-action-btn"
+                    onClick={() => setShowDropInCapture(true)}
+                  >
+                    Fichier
+                  </button>
+                </div>
+                {showDropInCapture && (
+                  <DropZone
+                    loggedIn={gestionLoggedIn}
+                    onNeedLogin={() => setSettingsOpen(true)}
+                  />
+                )}
+              </section>
+            )}
+
+            {panelMode === "timer" && (
+              <section className="panel-section panel-section-grow panel-timer-mode">
+                <h2>Minuteur</h2>
+                {linkedTimerTask ? (
+                  <p className="panel-timer-linked">
+                    <span className="panel-muted">Tâche du jour · </span>
+                    <button
+                      type="button"
+                      className="panel-link-btn"
+                      onClick={() => void gestionShowTask(linkedTimerTask.id)}
+                    >
+                      {linkedTimerTask.title}
+                    </button>
+                  </p>
+                ) : (
+                  <p className="panel-muted">Aucune tâche urgente liée.</p>
+                )}
+                <TimerPanel />
+              </section>
+            )}
+
+            <nav className="panel-mode-switch" aria-label="Mode panneau">
+              {(
+                [
+                  ["day", "Jour"],
+                  ["capture", "Capturer"],
+                  ["timer", "Minuteur"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`panel-mode-btn ${panelMode === id ? "is-active" : ""}`}
+                  aria-current={panelMode === id ? "page" : undefined}
+                  onClick={() => {
+                    setPanelMode(id);
+                    if (id !== "capture") setShowDropInCapture(false);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
           </>
         )}
       </div>

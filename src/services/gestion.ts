@@ -24,6 +24,13 @@ export function gestionShow(): Promise<void> {
   return invoke("gestion_show");
 }
 
+/** Deep-link Gestion : bureau | crm | projects. */
+export function gestionShowPage(
+  page: "bureau" | "crm" | "projects",
+): Promise<void> {
+  return invoke("gestion_show_page", { page });
+}
+
 /** Ouvre la fiche tâche Gestion (docs, notes, activités). */
 export function gestionShowTask(taskId: string): Promise<void> {
   return invoke("gestion_show_task", { taskId });

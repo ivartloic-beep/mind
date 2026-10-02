@@ -1104,6 +1104,66 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.panel-deep-links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+
+.panel-capture-mode h2,
+.panel-timer-mode h2 {
+  margin: 0 0 0.35rem;
+}
+
+.panel-capture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0.65rem 0 0.85rem;
+}
+
+.panel-timer-linked {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+}
+
+.panel-mode-switch {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.2rem;
+  margin-top: auto;
+  padding: 0.2rem;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: calc(var(--control-radius) + 2px);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.panel-mode-btn {
+  appearance: none;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.42rem 0.2rem;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.panel-mode-btn:hover {
+  color: var(--fg);
+}
+
+.panel-mode-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent-strong);
+}
+
 /* —— Déposer un fichier (pied file du jour) —— */
 .drop-zone-block {
   flex: 0 0 auto;
