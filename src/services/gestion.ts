@@ -68,6 +68,30 @@ export function gestionSyncNow(): Promise<GestionSyncReport> {
   return invoke<GestionSyncReport>("gestion_sync_now");
 }
 
+export type GestionUploadReport = {
+  filename: string;
+  visibility: string;
+  projectId?: string | null;
+  elementId?: string | null;
+};
+
+/** Dépose un fichier dans le workspace Gestion (bureau personal ou projet team). */
+export function gestionUploadFile(args: {
+  filename: string;
+  mime?: string | null;
+  dataBase64: string;
+  visibility: "personal" | "team";
+  projectId?: string | null;
+}): Promise<GestionUploadReport> {
+  return invoke<GestionUploadReport>("gestion_upload_file", {
+    filename: args.filename,
+    mime: args.mime ?? null,
+    dataBase64: args.dataBase64,
+    visibility: args.visibility,
+    projectId: args.projectId ?? null,
+  });
+}
+
 export function isGestionLoggedIn(cfg: GestionConfig | null | undefined): boolean {
   return Boolean(cfg?.apiUrl?.trim() && cfg?.authToken?.trim());
 }

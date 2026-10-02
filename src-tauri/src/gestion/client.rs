@@ -925,6 +925,72 @@ impl GestionClient {
         }
         Ok(())
     }
+
+    /// Upload fichier → `workspace_upload.php` (bureau personal ou projet team).
+    pub async fn upload_workspace_file(
+        &self,
+        filename: &str,
+        mime: Option<&str>,
+        bytes: Vec<u8>,
+        visibility: &str,
+        project_id: Option<&str>,
+    ) -> Result<Value, String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("workspace_upload.php");
+        let file_part = reqwest::multipart::Part::bytes(bytes)
+            .file_name(filename.to_string())
+            .mime_str(mime.unwrap_or("application/octet-stream"))
+            .map_err(|e| e.to_string())?;
+        let mut form = reqwest::multipart::Form::new()
+            .text("visibility", visibility.to_string())
+            .text("token", raw.clone())
+            .part("file", file_part);
+        if let Some(pid) = project_id {
+            if !pid.is_empty() {
+                form = form.text("project_id", pid.to_string());
+            }
+        }
+        let res = self
+            .http
+            .post(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .multipart(form)
+            .timeout(std::time::Duration::from_secs(120))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            let err = serde_json::from_str::<Value>(&text)
+                .ok()
+                .and_then(|v| {
+                    v.get("error")
+                        .and_then(|e| e.as_str())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or(text);
+            return Err(format!("upload HTTP {status}: {err}"));
+        }
+        let parsed: Value = serde_json::from_str(&text).map_err(|e| {
+            format!(
+                "upload JSON: {e} — {}",
+                text.chars().take(200).collect::<String>()
+            )
+        })?;
+        if parsed.get("success").and_then(|s| s.as_bool()) == Some(false) {
+            let err = parsed
+                .get("error")
+                .and_then(|e| e.as_str())
+                .unwrap_or("échec upload");
+            return Err(err.to_string());
+        }
+        Ok(parsed)
+    }
 }
 
 /// Encodage query minimal (évite dépendance urlencoding).

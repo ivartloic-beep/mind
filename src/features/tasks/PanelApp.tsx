@@ -1,5 +1,5 @@
 /**
- * Panneau compact — actions + 5 dernières tâches / notes + minuteur.
+ * Panneau compact — file du jour intelligente + dépôt fichier + minuteur.
  */
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -8,10 +8,8 @@ import {
   autostartIsEnabled,
   autostartSetEnabled,
   clearTaskReminder,
-  deleteNote,
   deleteTask,
   dismissReminder,
-  listNotes,
   listProjects,
   listTasks,
   openTaskFromReminder,
@@ -47,6 +45,7 @@ import {
   priorityClass,
   statusClass,
 } from "./taskLabels";
+import { pickDayQueue } from "./dayQueue";
 import { libraryShow } from "../../services/library";
 import {
   panelGetState,
@@ -69,37 +68,19 @@ import {
   setPanelAlwaysOnTop as storeSetAot,
   setPanelOpen as storeSetOpen,
 } from "../../stores/ui-store";
-import type { Note, Task } from "../../types/models";
+import type { Task } from "../../types/models";
 import { isTaskOpen } from "../../types/models";
+import { DropZone } from "../panel/DropZone";
 import { ReminderDueBanner } from "../reminders/ReminderDueBanner";
 import { TimerPanel } from "../timer/TimerPanel";
 import "./panel.css";
 
 type LoadState = "loading" | "ready" | "error";
 
-function sortRecentTasks(rows: Task[]): Task[] {
-  return [...rows]
-    .filter((t) => isTaskOpen(t))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 5);
-}
-
-function sortRecentNotes(rows: Note[]): Note[] {
-  return [...rows]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 5);
-}
-
-function preview(text: string): string {
-  const one = text.replace(/\s+/g, " ").trim();
-  return one.length > 48 ? `${one.slice(0, 48)}…` : one;
-}
-
 export function PanelApp() {
   const [open, setOpen] = useState(true);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -129,14 +110,11 @@ export function PanelApp() {
   const [cloudEdit, setCloudEdit] = useState(false);
   const [, startTransition] = useTransition();
   const gestionLoggedInRef = useRef(false);
+  const dayQueue = pickDayQueue(tasks, 4);
 
   const refresh = useCallback(async () => {
-    const [taskRows, noteRows] = await Promise.all([
-      listTasks(),
-      listNotes(),
-    ]);
-    setTasks(sortRecentTasks(taskRows));
-    setNotes(sortRecentNotes(noteRows));
+    const taskRows = await listTasks();
+    setTasks(taskRows);
     setLoadState("ready");
     setLoadError(null);
     try {
@@ -214,7 +192,6 @@ export function PanelApp() {
     void listenDataChanged((payload) => {
       if (
         payload.entity === "task" ||
-        payload.entity === "note" ||
         payload.entity === "reminder" ||
         payload.entity === "project" ||
         payload.entity === "sync"
@@ -420,19 +397,6 @@ export function PanelApp() {
     setPendingId(task.id);
     try {
       await deleteTask(task.id);
-      await refresh();
-    } finally {
-      setPendingId(null);
-    }
-  }
-
-  async function removeNote(note: Note) {
-    const label = note.title?.trim() || preview(note.body);
-    const ok = window.confirm(`Supprimer la note « ${label} » ?`);
-    if (!ok) return;
-    setPendingId(note.id);
-    try {
-      await deleteNote(note.id);
       await refresh();
     } finally {
       setPendingId(null);
@@ -946,7 +910,7 @@ export function PanelApp() {
 
             <section className="panel-section panel-section-grow">
               <div className="panel-section-head">
-                <h2>Récent</h2>
+                <h2>File du jour</h2>
                 <button
                   type="button"
                   className="panel-link-btn"
@@ -964,12 +928,11 @@ export function PanelApp() {
               )}
               {loadState === "ready" && (
                 <>
-                  <p className="panel-subhead">Tâches</p>
-                  {tasks.length === 0 ? (
-                    <p className="panel-muted">Aucune tâche active.</p>
+                  {dayQueue.length === 0 ? (
+                    <p className="panel-muted">Rien d’urgent pour aujourd’hui.</p>
                   ) : (
                     <ul className="panel-recent-list">
-                      {tasks.map((task) => {
+                      {dayQueue.map((task) => {
                         const prio = formatTaskPriority(task.priority);
                         const due = formatTaskDue(task.dueDate);
                         return (
@@ -1046,37 +1009,14 @@ export function PanelApp() {
                       })}
                     </ul>
                   )}
-
-                  <p className="panel-subhead">Notes</p>
-                  {notes.length === 0 ? (
-                    <p className="panel-muted">Aucune note.</p>
-                  ) : (
-                    <ul className="panel-recent-list">
-                      {notes.map((note) => (
-                        <li key={note.id} className="panel-recent-item">
-                          <span className="panel-recent-kind">
-                            {note.kind === "idea" ? "idée" : "note"}
-                          </span>
-                          <span className="panel-recent-title">
-                            {note.title?.trim() || preview(note.body)}
-                          </span>
-                          <button
-                            type="button"
-                            className="item-delete-btn"
-                            disabled={pendingId === note.id}
-                            aria-label="Supprimer la note"
-                            title="Supprimer"
-                            onClick={() => void removeNote(note)}
-                          >
-                            ×
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </>
               )}
             </section>
+
+            <DropZone
+              loggedIn={gestionLoggedIn}
+              onNeedLogin={() => setSettingsOpen(true)}
+            />
 
             <section className="panel-section">
               <h2>Minuteur</h2>

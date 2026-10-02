@@ -1104,6 +1104,113 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* —— Déposer un fichier (pied file du jour) —— */
+.drop-zone-block {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.drop-zone {
+  border: 1px dashed color-mix(in srgb, var(--border) 90%, var(--accent));
+  border-radius: var(--control-radius);
+  padding: 0.7rem 0.75rem;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-items: flex-start;
+}
+
+.drop-zone.is-dragging {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.drop-zone.is-busy {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.drop-zone-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.drop-zone-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.drop-zone-browse {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--accent-strong);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.drop-sheet {
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  padding: 0.65rem 0.7rem;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.drop-sheet-name {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drop-sheet-dest {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.drop-dest-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+}
+
+.drop-dest-btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.drop-sheet-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.drop-zone-msg {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
 html,
 body,
 #root {

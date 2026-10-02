@@ -238,6 +238,78 @@ pub fn gestion_show(app: AppHandle) -> Result<(), String> {
     show_gestion(&app)
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestionUploadReport {
+    pub filename: String,
+    pub visibility: String,
+    pub project_id: Option<String>,
+    pub element_id: Option<String>,
+}
+
+/// Dépose un fichier dans le workspace Gestion (bureau ou projet).
+#[tauri::command]
+pub async fn gestion_upload_file(
+    app: AppHandle,
+    filename: String,
+    mime: Option<String>,
+    data_base64: String,
+    visibility: String,
+    project_id: Option<String>,
+) -> Result<GestionUploadReport, String> {
+    use base64::Engine;
+    let client = crate::gestion::try_client(&app)
+        .ok_or_else(|| "Connecte-toi à Gestion pour déposer un fichier".to_string())?;
+    let vis = visibility.trim();
+    if vis != "personal" && vis != "team" {
+        return Err("visibility doit être personal ou team".into());
+    }
+    let pid = project_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+    if vis == "team" && pid.is_none() {
+        return Err("Choisis un projet pour déposer en team".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.trim())
+        .map_err(|e| format!("base64: {e}"))?;
+    if bytes.is_empty() {
+        return Err("Fichier vide".into());
+    }
+    if bytes.len() > 25 * 1024 * 1024 {
+        return Err("Fichier trop volumineux (max 25 Mo)".into());
+    }
+    let name = filename.trim();
+    if name.is_empty() {
+        return Err("Nom de fichier manquant".into());
+    }
+    let parsed = client
+        .upload_workspace_file(
+            name,
+            mime.as_deref(),
+            bytes,
+            vis,
+            pid.as_deref(),
+        )
+        .await?;
+    let element_id = parsed
+        .get("element")
+        .and_then(|e| e.get("id"))
+        .and_then(|id| {
+            id.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| id.as_i64().map(|n| n.to_string()))
+        });
+    Ok(GestionUploadReport {
+        filename: name.to_string(),
+        visibility: vis.to_string(),
+        project_id: pid,
+        element_id,
+    })
+}
+
 /// Ouvre Gestion sur la fiche tâche (documents, notes, activités… comme le bureau).
 #[tauri::command]
 pub fn gestion_show_task(app: AppHandle, task_id: String) -> Result<(), String> {
