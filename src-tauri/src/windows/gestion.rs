@@ -3,10 +3,45 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use url::Url;
+
+static GESTION_DOC_WINDOW_SEQ: AtomicU64 = AtomicU64::new(1);
+
+fn open_url_os(url: &str) -> Result<(), String> {
+    open::that(url).map_err(|e| format!("ouverture: {e}"))
+}
+
+fn downloads_dir() -> PathBuf {
+    if let Some(home) = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+    {
+        let d = PathBuf::from(home).join("Downloads");
+        if d.is_dir() {
+            return d;
+        }
+    }
+    std::env::temp_dir()
+}
+
+fn filename_from_url(url: &Url) -> String {
+    url.path_segments()
+        .and_then(|mut s| s.next_back())
+        .filter(|s| !s.is_empty() && *s != "workspace_file.php")
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            let id = url
+                .query_pairs()
+                .find(|(k, _)| k == "id")
+                .map(|(_, v)| v.to_string())
+                .unwrap_or_else(|| "document".into());
+            format!("gestion-{id}")
+        })
+}
 
 pub const GESTION_LABEL: &str = "gestion";
 /// Défaut Loïc / louetline — overridable via prefs.
@@ -152,6 +187,43 @@ const SESSION_BRIDGE_INIT: &str = r#"(function(){
       pushSession();
     } catch (e) {}
   }, 1000);
+  // WebView Tauri bloque window.open / <a download> croisés → OS.
+  try {
+    function mindOpenUrl(url) {
+      try {
+        var c = window.__TAURI__ && window.__TAURI__.core;
+        if (c && typeof c.invoke === 'function') {
+          c.invoke('open_external_url', { url: String(url) });
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+    window.__MIND_NATIVE_OPEN__ = window.__MIND_NATIVE_OPEN__ || window.open;
+    window.open = function(url, target, features) {
+      if (!url) return null;
+      if (mindOpenUrl(url)) return null;
+      if (typeof window.__MIND_NATIVE_OPEN__ === 'function') {
+        return window.__MIND_NATIVE_OPEN__.call(window, url, target, features);
+      }
+      return null;
+    };
+    if (!window.__MIND_DOC_CLICK__) {
+      window.__MIND_DOC_CLICK__ = true;
+      document.addEventListener('click', function(ev) {
+        try {
+          var t = ev.target;
+          if (!t || !t.closest) return;
+          var a = t.closest('a[href*="workspace_file.php"], a[download]');
+          if (!a || !a.href) return;
+          if (a.href.indexOf('workspace_file.php') === -1 && a.href.indexOf('/uploads/') === -1) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          mindOpenUrl(a.href);
+        } catch (e) {}
+      }, true);
+    }
+  } catch (e) {}
   setTimeout(pushSession, 150);
   setTimeout(pushSession, 800);
   setTimeout(pushSession, 2000);
@@ -206,11 +278,12 @@ fn parse_front_url(api_url: &str) -> Result<Url, String> {
 
 fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> {
     if let Some(existing) = app.get_webview_window(GESTION_LABEL) {
-        // Navigue vers le front distant (évite le shell local embarqué qui bloque la saisie).
-        let _ = existing.navigate(front.clone());
+        // Ne pas re-naviguer si déjà sur Gestion — évite de perdre l’état UI.
+        let _ = existing;
         return Ok(existing);
     }
 
+    let app_for_new = app.clone();
     let window = WebviewWindowBuilder::new(
         app,
         GESTION_LABEL,
@@ -226,6 +299,55 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
     .center()
     .visible(false)
     .initialization_script(SESSION_BRIDGE_INIT)
+    // Docs projet / bureau : window.open → navigateur / visionneuse système.
+    .on_new_window(move |url, _features| {
+        let url_str = url.to_string();
+        // Fichiers API : ouvrir hors WebView (sinon bloqué).
+        if url_str.contains("workspace_file.php")
+            || url_str.contains("/uploads/")
+            || url_str.contains("download=1")
+        {
+            let _ = open_url_os(&url_str);
+            return NewWindowResponse::Deny;
+        }
+        // Autre popup : petite fenêtre Tauri dédiée.
+        let n = GESTION_DOC_WINDOW_SEQ.fetch_add(1, Ordering::Relaxed);
+        let label = format!("gestion-doc-{n}");
+        match WebviewWindowBuilder::new(
+            &app_for_new,
+            &label,
+            WebviewUrl::External(url.clone()),
+        )
+        .title("MIND — Document")
+        .inner_size(960.0, 720.0)
+        .build()
+        {
+            Ok(window) => NewWindowResponse::Create { window },
+            Err(_) => {
+                let _ = open_url_os(&url_str);
+                NewWindowResponse::Deny
+            }
+        }
+    })
+    // Téléchargements (Content-Disposition) → dossier Téléchargements.
+    .on_download(|_webview, event| {
+        match event {
+            DownloadEvent::Requested { url, destination } => {
+                let name = filename_from_url(&url);
+                *destination = downloads_dir().join(name);
+                true
+            }
+            DownloadEvent::Finished { success, path, .. } => {
+                if success {
+                    if let Some(path) = path {
+                        let _ = open::that(path);
+                    }
+                }
+                true
+            }
+            _ => true,
+        }
+    })
     .build()
     .map_err(|e| e.to_string())?;
 
@@ -274,6 +396,27 @@ pub fn init_gestion(app: &AppHandle, background: bool) -> Result<(), String> {
 #[tauri::command]
 pub fn gestion_show(app: AppHandle) -> Result<(), String> {
     show_gestion(&app)
+}
+
+/// Ouvre une URL hors WebView (docs projet, téléchargements, liens).
+#[tauri::command]
+pub fn open_external_url(url: String) -> Result<(), String> {
+    let url = url.trim();
+    if url.is_empty() {
+        return Err("URL vide".into());
+    }
+    if !(url.starts_with("https://")
+        || url.starts_with("http://")
+        || url.starts_with("blob:")
+        || url.starts_with("file:"))
+    {
+        return Err("URL non autorisée".into());
+    }
+    // blob: ne s’ouvre pas via OS — ignorer poliment.
+    if url.starts_with("blob:") {
+        return Err("Aperçu blob non supporté hors WebView".into());
+    }
+    open_url_os(url)
 }
 
 #[derive(Debug, Clone, Serialize)]
