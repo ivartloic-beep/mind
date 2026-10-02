@@ -128,9 +128,8 @@ fn toggle_panel(app: &AppHandle) {
     let next = !prefs.open;
     match panel::panel_set_open(app.clone(), next) {
         Ok(_) => {
-            if let Some(window) = app.get_webview_window(PANEL_LABEL) {
-                let _ = window.show();
-                if next {
+            if next {
+                if let Some(window) = app.get_webview_window(PANEL_LABEL) {
                     let _ = window.set_focus();
                 }
             }

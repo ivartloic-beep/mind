@@ -124,10 +124,8 @@ pub fn handle_run_event(_app: &AppHandle, event: &RunEvent) {
 fn show_panel(app: &AppHandle, open: bool) {
     match panel::panel_set_open(app.clone(), open) {
         Ok(_) => {
-            if let Some(window) = app.get_webview_window(PANEL_LABEL) {
-                let _ = window.show();
-                if open {
-                    let _ = window.unminimize();
+            if open {
+                if let Some(window) = app.get_webview_window(PANEL_LABEL) {
                     let _ = window.set_focus();
                 }
             }

@@ -1,4 +1,4 @@
-//! Panneau latéral — ancrage bord droit, slide open/close, always-on-top mémorisé.
+//! Panneau latéral — ancrage bord droit, hide quand fermé (tray / raccourci pour rouvrir).
 
 use std::fs;
 use std::path::PathBuf;
@@ -10,10 +10,6 @@ pub const PANEL_LABEL: &str = "panel";
 pub const PANEL_CONTENT_WIDTH: f64 = 400.0;
 /// Bandeau gauche du panneau ouvert (fermer).
 pub const HANDLE_WIDTH: f64 = 28.0;
-/// Onglet flottant coin haut-droit quand le panneau est fermé.
-pub const CLOSED_TAB_W: f64 = 40.0;
-pub const CLOSED_TAB_H: f64 = 40.0;
-pub const CLOSED_TAB_MARGIN: f64 = 12.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +21,7 @@ pub struct PanelPrefs {
 impl Default for PanelPrefs {
     fn default() -> Self {
         Self {
-            // Étape 12 : boot discret — ouvrir via tray / CTRL+ALT+Espace.
+            // Boot discret — ouvrir via tray / raccourci.
             open: false,
             always_on_top: false,
         }
@@ -85,28 +81,16 @@ fn work_area_logical(window: &WebviewWindow) -> Result<(f64, f64, f64, f64), Str
     ))
 }
 
-pub fn apply_panel_geometry(window: &WebviewWindow, open: bool) -> Result<(), String> {
+pub fn apply_panel_geometry(window: &WebviewWindow) -> Result<(), String> {
     let (wx, wy, ww, wh) = work_area_logical(window)?;
-    if open {
-        let width = PANEL_CONTENT_WIDTH;
-        let x = wx + ww - width;
-        window
-            .set_size(LogicalSize::new(width, wh))
-            .map_err(|e| e.to_string())?;
-        window
-            .set_position(LogicalPosition::new(x, wy))
-            .map_err(|e| e.to_string())?;
-    } else {
-        // Petite flèche flottante en haut à droite (plus de barre pleine hauteur).
-        let x = wx + ww - CLOSED_TAB_W - CLOSED_TAB_MARGIN;
-        let y = wy + CLOSED_TAB_MARGIN;
-        window
-            .set_size(LogicalSize::new(CLOSED_TAB_W, CLOSED_TAB_H))
-            .map_err(|e| e.to_string())?;
-        window
-            .set_position(LogicalPosition::new(x, y))
-            .map_err(|e| e.to_string())?;
-    }
+    let width = PANEL_CONTENT_WIDTH;
+    let x = wx + ww - width;
+    window
+        .set_size(LogicalSize::new(width, wh))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(LogicalPosition::new(x, wy))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -125,14 +109,13 @@ pub fn init_panel(app: &AppHandle, background: bool) -> Result<(), String> {
     window
         .set_always_on_top(prefs.always_on_top)
         .map_err(|e| e.to_string())?;
-    apply_panel_geometry(&window, prefs.open)?;
+    apply_panel_geometry(&window)?;
     let _ = save_prefs(app, &prefs);
 
-    if background {
-        // Autostart : app en arrière-plan, pas de flash panneau.
-        let _ = window.hide();
-    } else {
+    if prefs.open && !background {
         let _ = window.show();
+    } else {
+        let _ = window.hide();
     }
     Ok(())
 }
@@ -154,7 +137,13 @@ pub fn panel_set_open(app: AppHandle, open: bool) -> Result<PanelState, String> 
     prefs.open = open;
     save_prefs(&app, &prefs)?;
     let window = panel_window(&app)?;
-    apply_panel_geometry(&window, open)?;
+    if open {
+        apply_panel_geometry(&window)?;
+        let _ = window.show();
+        let _ = window.unminimize();
+    } else {
+        let _ = window.hide();
+    }
     let state = PanelState {
         open: prefs.open,
         always_on_top: prefs.always_on_top,
@@ -182,12 +171,14 @@ pub fn panel_set_always_on_top(app: AppHandle, always_on_top: bool) -> Result<Pa
     })
 }
 
-/// Resync géométrie (ex. changement de moniteur) — garde l'état open courant.
+/// Resync géométrie (ex. changement de moniteur) — seulement si le panneau est ouvert.
 #[tauri::command]
 pub fn panel_redock(app: AppHandle) -> Result<PanelState, String> {
     let prefs = load_prefs(&app);
     let window = panel_window(&app)?;
-    apply_panel_geometry(&window, prefs.open)?;
+    if prefs.open {
+        apply_panel_geometry(&window)?;
+    }
     Ok(PanelState {
         open: prefs.open,
         always_on_top: prefs.always_on_top,
