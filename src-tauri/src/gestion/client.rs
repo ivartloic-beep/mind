@@ -1,4 +1,6 @@
-//! HTTP client pour login.php + personal_tasks.php + work_projects.php.
+//! HTTP client pour login.php + personal_tasks.php + projects.php + work_projects.php.
+
+use std::collections::HashSet;
 
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
@@ -56,6 +58,13 @@ struct ApiWorkProjectsResponse {
     error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ApiProjectsResponse {
+    success: Option<bool>,
+    projects: Option<Vec<Value>>,
+    error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkProjectsData {
@@ -66,21 +75,40 @@ pub struct WorkProjectsData {
     pub templates: Vec<Value>,
 }
 
+fn json_id(value: &Value) -> Option<String> {
+    value.get("id").and_then(|v| {
+        v.as_str()
+            .map(|s| s.to_string())
+            .or_else(|| v.as_i64().map(|n| n.to_string()))
+            .or_else(|| v.as_u64().map(|n| n.to_string()))
+            .or_else(|| v.as_f64().map(|n| n.to_string()))
+    })
+    .filter(|s| !s.is_empty())
+}
+
+fn json_str_any(value: &Value, keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Some(s) = value
+            .get(*key)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            return Some(s.to_string());
+        }
+    }
+    None
+}
+
+/// Espace de travail Gestion (`work_projects`) — champ principal = `title`.
 pub fn work_project_to_mind(value: &Value) -> Option<Project> {
-    let id = value.get("id")?.as_str()?.to_string();
-    let name = value.get("name")?.as_str()?.to_string();
-    if id.is_empty() || name.is_empty() {
+    if value.get("archived").and_then(|v| v.as_bool()) == Some(true) {
         return None;
     }
-    let color = value
-        .get("color")
-        .and_then(|c| c.as_str())
-        .map(|s| s.to_string());
-    let created_at = value
-        .get("createdAt")
-        .and_then(|c| c.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(now_iso);
+    let id = json_id(value)?;
+    let name = json_str_any(value, &["title", "name", "nom"])?;
+    let color = json_str_any(value, &["color"]);
+    let created_at = json_str_any(value, &["createdAt", "created_at"]).unwrap_or_else(now_iso);
     Some(Project {
         id,
         name,
@@ -89,11 +117,52 @@ pub fn work_project_to_mind(value: &Value) -> Option<Project> {
     })
 }
 
+/// Projets Production Gestion (`projects.php`) — `name` / `nom` / spectacles imbriqués.
+pub fn production_projects_to_mind(projects: &[Value]) -> Vec<Project> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+
+    let push = |value: &Value, out: &mut Vec<Project>, seen: &mut HashSet<String>| {
+        let id = match json_id(value) {
+            Some(id) => id,
+            None => return,
+        };
+        if !seen.insert(id.clone()) {
+            return;
+        }
+        let name = match json_str_any(value, &["name", "nom", "title", "lieu"]) {
+            Some(n) => n,
+            None => return,
+        };
+        let color = json_str_any(value, &["color"]);
+        let created_at =
+            json_str_any(value, &["createdAt", "created_at"]).unwrap_or_else(now_iso);
+        out.push(Project {
+            id,
+            name,
+            color,
+            created_at,
+        });
+    };
+
+    for p in projects {
+        push(p, &mut out, &mut seen);
+        if let Some(specs) = p.get("spectacles").and_then(|s| s.as_array()) {
+            for s in specs {
+                push(s, &mut out, &mut seen);
+            }
+        }
+    }
+    out
+}
+
 pub fn upsert_work_project_value(data: &mut WorkProjectsData, project: &Project) {
     let mut found = false;
     for entry in &mut data.projects {
-        if entry.get("id").and_then(|v| v.as_str()) == Some(project.id.as_str()) {
+        if json_id(entry).as_deref() == Some(project.id.as_str()) {
             if let Some(obj) = entry.as_object_mut() {
+                // Gestion lit `title` (pas `name`).
+                obj.insert("title".into(), Value::String(project.name.clone()));
                 obj.insert("name".into(), Value::String(project.name.clone()));
                 if let Some(color) = &project.color {
                     obj.insert("color".into(), Value::String(color.clone()));
@@ -107,12 +176,15 @@ pub fn upsert_work_project_value(data: &mut WorkProjectsData, project: &Project)
     if !found {
         data.projects.push(serde_json::json!({
             "id": project.id,
+            "title": project.name,
             "name": project.name,
             "color": project.color.clone().unwrap_or_else(|| "#4a90d9".into()),
             "icon": "📁",
             "description": "",
             "tasks": [],
+            "members": [],
             "team": [],
+            "archived": false,
             "createdAt": project.created_at,
             "updatedAt": now_iso(),
         }));
@@ -121,7 +193,7 @@ pub fn upsert_work_project_value(data: &mut WorkProjectsData, project: &Project)
 
 pub fn remove_work_project_value(data: &mut WorkProjectsData, id: &str) {
     data.projects
-        .retain(|e| e.get("id").and_then(|v| v.as_str()) != Some(id));
+        .retain(|e| json_id(e).as_deref() != Some(id));
 }
 
 /// Payload brut personal_tasks (API PHP).
@@ -455,6 +527,39 @@ impl GestionClient {
             return Err(format!("personal_tasks DELETE HTTP {status}: {text}"));
         }
         Ok(())
+    }
+
+    /// Projets Production (tournées / spectacles) — `projects.php`.
+    pub async fn get_production_projects(&self) -> Result<Vec<Value>, String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let endpoint = format!("projects.php?token={}", urlencoding_lite(&raw));
+        let url = self.url(&endpoint);
+        let res = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let body = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("projects GET HTTP {status}: {body}"));
+        }
+        let parsed: ApiProjectsResponse = serde_json::from_str(&body).map_err(|e| {
+            format!(
+                "projects JSON: {e} — {}",
+                body.chars().take(200).collect::<String>()
+            )
+        })?;
+        if let Some(err) = parsed.error {
+            return Err(err);
+        }
+        Ok(parsed.projects.unwrap_or_default())
     }
 
     pub async fn get_work_projects(&self) -> Result<WorkProjectsData, String> {

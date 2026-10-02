@@ -343,7 +343,7 @@ export function CaptureApp() {
                 value={projectId}
                 disabled={busy}
                 onChange={setProjectId}
-                ariaLabel="Projet / catégorie Gestion (optionnel)"
+                ariaLabel="Projet Gestion (Production ou espace de travail)"
               />
               <button
                 type="button"
@@ -355,6 +355,11 @@ export function CaptureApp() {
                 + Nouveau
               </button>
             </div>
+          )}
+          {!creatingProject && projects.length === 0 && (
+            <p className="capture-hint">
+              Aucun projet Gestion — connecte-toi dans Paramètres, ou crée-en un.
+            </p>
           )}
           {creatingProject && (
             <div className="capture-project-create">

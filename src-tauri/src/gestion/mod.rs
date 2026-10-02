@@ -12,7 +12,8 @@ use crate::storage::Storage;
 use crate::windows::gestion::{load_prefs, save_prefs, GestionPrefs};
 
 use self::client::{
-    remove_work_project_value, upsert_work_project_value, work_project_to_mind,
+    production_projects_to_mind, remove_work_project_value, upsert_work_project_value,
+    work_project_to_mind,
 };
 
 pub fn try_client(app: &AppHandle) -> Option<GestionClient> {
@@ -267,23 +268,66 @@ pub async fn list_projects_hybrid(
     let Some(client) = try_client(app) else {
         return state.storage.list_projects().map_err(|e| e.to_string());
     };
-    match client.get_work_projects().await {
-        Ok(data) => {
-            set_last_error(app, None);
-            let mut out = Vec::new();
-            for entry in &data.projects {
-                if let Some(p) = work_project_to_mind(entry) {
+
+    use std::collections::HashSet;
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    let mut any_ok = false;
+    let mut errors: Vec<String> = Vec::new();
+
+    // Même source que le select « Projet » Gestion : Production + espaces de travail.
+    match client.get_production_projects().await {
+        Ok(rows) => {
+            any_ok = true;
+            for p in production_projects_to_mind(&rows) {
+                if seen.insert(p.id.clone()) {
                     state.storage.upsert_project(&p).map_err(|e| e.to_string())?;
                     out.push(p);
                 }
             }
-            out.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-            Ok(out)
         }
-        Err(err) => {
-            set_last_error(app, Some(format!("Projets cache — {err}")));
-            state.storage.list_projects().map_err(|e| e.to_string())
+        Err(err) => errors.push(format!("projects.php — {err}")),
+    }
+
+    match client.get_work_projects().await {
+        Ok(data) => {
+            any_ok = true;
+            for entry in &data.projects {
+                if let Some(p) = work_project_to_mind(entry) {
+                    if seen.insert(p.id.clone()) {
+                        state
+                            .storage
+                            .upsert_project(&p)
+                            .map_err(|e| e.to_string())?;
+                        out.push(p);
+                    }
+                }
+            }
         }
+        Err(err) => errors.push(format!("work_projects.php — {err}")),
+    }
+
+    if any_ok {
+        if errors.is_empty() {
+            set_last_error(app, None);
+        } else {
+            set_last_error(app, Some(format!("Projets partiels — {}", errors.join(" · "))));
+        }
+        out.sort_by(|a, b| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then_with(|| a.created_at.cmp(&b.created_at))
+        });
+        Ok(out)
+    } else {
+        let detail = if errors.is_empty() {
+            "API injoignable".to_string()
+        } else {
+            errors.join(" · ")
+        };
+        set_last_error(app, Some(format!("Projets cache — {detail}")));
+        state.storage.list_projects().map_err(|e| e.to_string())
     }
 }
 
