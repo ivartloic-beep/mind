@@ -75,9 +75,20 @@ Prefs sync : `{app_data_dir}/sync-prefs.json` (URL + token, hors git).
 
 ### Sync cloud
 
-1. Panneau → **Réglages** → coller le Bearer token mind-api  
-2. **Tester** puis **Synchroniser** (pull puis push, last-write wins)  
-3. Si « Sync activée » : sync auto toutes les 5 min
+1. Panneau → **⚙ Paramètres** → Cloud → **Configurer** → coller le Bearer token  
+2. **Tester la connexion** puis **Synchroniser**  
+3. Si « Synchronisation » cochée : sync auto toutes les 5 min  
+
+### Raccourcis Bureau (Windows)
+
+```powershell
+cd mind
+git pull origin main
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\create-desktop-shortcuts.ps1
+```
+
+- **Mettre a jour MIND** — `git pull` + `npm install`  
+- **Ouvrir MIND** — lance l’exe (ou `desktop:dev` s’il n’existe pas encore)
 
 ## Entries frontend
 
