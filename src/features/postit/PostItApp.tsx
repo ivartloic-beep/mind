@@ -166,15 +166,30 @@ export function PostItApp() {
             scheduleSave(next, body);
           }}
         />
-        <label className="postit-aot" title="Toujours au-dessus">
-          <input
-            type="checkbox"
-            checked={postit?.alwaysOnTop ?? true}
-            onChange={() => void toggleAlwaysOnTop()}
-          />
-          <span>Top</span>
-        </label>
         {saving && <span className="postit-saving">…</span>}
+        <button
+          type="button"
+          className={`postit-pin ${(postit?.alwaysOnTop ?? true) ? "is-on" : ""}`}
+          aria-label={
+            postit?.alwaysOnTop ?? true
+              ? "Désépingler (ne plus garder au-dessus)"
+              : "Épingler (garder au-dessus)"
+          }
+          title={
+            postit?.alwaysOnTop ?? true
+              ? "Épinglé — toujours au-dessus"
+              : "Épingler — toujours au-dessus"
+          }
+          aria-pressed={postit?.alwaysOnTop ?? true}
+          onClick={() => void toggleAlwaysOnTop()}
+        >
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M16 3a1 1 0 0 1 1 1v2.2l1.6.9a1 1 0 0 1 .4 1.3l-1.5 2.7.9.9a1 1 0 0 1 0 1.4l-2.1 2.1-1.1-1.1-3.2 5.6a1 1 0 0 1-1.8-.2l-1.5-4.1-1.8 1.8a1 1 0 0 1-1.4 0L4.4 15a1 1 0 0 1 0-1.4l1.8-1.8-4.1-1.5a1 1 0 0 1-.2-1.8l5.6-3.2-1.1-1.1a1 1 0 0 1 1.4 0l.9.9 2.7-1.5a1 1 0 0 1 1.3.4L15 6V4a1 1 0 0 1 1-1Z"
+            />
+          </svg>
+        </button>
         <button
           type="button"
           className="postit-close"

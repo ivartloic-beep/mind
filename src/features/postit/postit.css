@@ -43,14 +43,38 @@
   cursor: text;
 }
 
-.postit-aot {
-  display: flex;
-  align-items: center;
-  gap: 0.22rem;
-  font-size: 0.7rem;
-  color: #6a5a3a;
-  user-select: none;
+.postit-pin {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: rgba(122, 90, 42, 0.35);
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  transform: rotate(-35deg);
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.postit-pin:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(122, 90, 42, 0.75);
+}
+
+.postit-pin.is-on {
+  color: #b42318;
+  transform: rotate(-20deg);
+}
+
+.postit-pin.is-on:hover {
+  color: #8f1c13;
 }
 
 .postit-close {
