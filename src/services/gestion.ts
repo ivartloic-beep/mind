@@ -89,6 +89,18 @@ export type DroppedFilePayload = {
   size: number;
 };
 
+export type DroppedFileMeta = {
+  filename: string;
+  mime: string;
+  size: number;
+  path: string;
+};
+
+/** Métadonnées d’un fichier OS déposé (sans charger le contenu). */
+export function peekDroppedFile(path: string): Promise<DroppedFileMeta> {
+  return invoke<DroppedFileMeta>("peek_dropped_file", { path });
+}
+
 /** Lit un fichier OS déposé (chemins Tauri drag-drop). */
 export function readDroppedFile(path: string): Promise<DroppedFilePayload> {
   return invoke<DroppedFilePayload>("read_dropped_file", { path });
@@ -109,6 +121,37 @@ export function gestionUploadFile(args: {
     visibility: args.visibility,
     projectId: args.projectId ?? null,
   });
+}
+
+/** Upload depuis un chemin OS (drag-and-drop) sans re-passer le base64. */
+export function gestionUploadFilePath(args: {
+  path: string;
+  visibility: "personal" | "team";
+  projectId?: string | null;
+}): Promise<GestionUploadReport> {
+  return invoke<GestionUploadReport>("gestion_upload_file_path", {
+    path: args.path,
+    visibility: args.visibility,
+    projectId: args.projectId ?? null,
+  });
+}
+
+/** Message d’erreur Tauri (souvent une string, pas un Error). */
+export function formatInvokeError(err: unknown, fallback: string): string {
+  if (typeof err === "string" && err.trim()) return err.trim();
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (err && typeof err === "object") {
+    const o = err as { message?: unknown; error?: unknown };
+    if (typeof o.message === "string" && o.message.trim()) return o.message.trim();
+    if (typeof o.error === "string" && o.error.trim()) return o.error.trim();
+  }
+  try {
+    const s = JSON.stringify(err);
+    if (s && s !== "{}") return s;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
 }
 
 export function isGestionLoggedIn(cfg: GestionConfig | null | undefined): boolean {

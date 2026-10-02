@@ -7,11 +7,13 @@ import { useCallback, useEffect, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listProjects } from "../../services/api";
 import {
+  formatInvokeError,
   gestionGetConfig,
   gestionTasksBackendActive,
   gestionUploadFile,
+  gestionUploadFilePath,
   isGestionLoggedIn,
-  readDroppedFile,
+  peekDroppedFile,
 } from "../../services/gestion";
 import type { Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
@@ -21,6 +23,8 @@ type PendingFile = {
   mime: string;
   base64: string;
   size: number;
+  /** Chemin OS si drag-and-drop Tauri — upload direct sans re-base64. */
+  osPath?: string;
 };
 
 type Props = {
@@ -114,8 +118,8 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       if (!list.length) return;
       try {
         await beginPending(await fileToPending(list[0]));
-      } catch {
-        setError("Lecture du fichier impossible.");
+      } catch (err) {
+        setError(formatInvokeError(err, "Lecture du fichier impossible."));
       }
     },
     [beginPending],
@@ -129,19 +133,32 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       setError(null);
       setMsg(null);
       try {
-        const file = await readDroppedFile(path);
-        await beginPending({
-          name: file.filename,
-          mime: file.mime,
-          base64: file.dataBase64,
-          size: file.size,
+        const active = loggedIn || (await sessionIsActive());
+        onSessionResolved?.(active);
+        if (!active) {
+          setNeedsLogin(true);
+          setError("Connecte-toi à Gestion pour déposer un fichier.");
+          return;
+        }
+        setNeedsLogin(false);
+        // Métadonnées légères pour l’UI ; l’envoi utilisera le chemin OS.
+        const meta = await peekDroppedFile(path);
+        setPending({
+          name: meta.filename,
+          mime: meta.mime,
+          base64: "",
+          size: meta.size,
+          osPath: meta.path || path,
         });
+        setDest("bureau");
+        setProjectId(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Lecture du fichier impossible.");
+        setError(formatInvokeError(err, "Lecture du fichier impossible."));
+      } finally {
         setBusy(false);
       }
     },
-    [beginPending],
+    [loggedIn, onSessionResolved],
   );
 
   // Drag-and-drop natif Tauri (Explorer → panneau Windows).
@@ -186,14 +203,21 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
     setBusy(true);
     setError(null);
     setMsg(null);
+    const visibility = dest === "bureau" ? "personal" : "team";
     try {
-      const report = await gestionUploadFile({
-        filename: pending.name,
-        mime: pending.mime,
-        dataBase64: pending.base64,
-        visibility: dest === "bureau" ? "personal" : "team",
-        projectId: dest === "project" ? projectId : null,
-      });
+      const report = pending.osPath
+        ? await gestionUploadFilePath({
+            path: pending.osPath,
+            visibility,
+            projectId: dest === "project" ? projectId : null,
+          })
+        : await gestionUploadFile({
+            filename: pending.name,
+            mime: pending.mime,
+            dataBase64: pending.base64,
+            visibility,
+            projectId: dest === "project" ? projectId : null,
+          });
       setMsg(
         dest === "bureau"
           ? `Déposé dans le bureau — ${report.filename}`
@@ -201,7 +225,7 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       );
       setPending(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Envoi impossible");
+      setError(formatInvokeError(err, "Envoi impossible"));
     } finally {
       setBusy(false);
     }

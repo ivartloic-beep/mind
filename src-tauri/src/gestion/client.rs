@@ -937,10 +937,36 @@ impl GestionClient {
     ) -> Result<Value, String> {
         let (bearer, raw) = self.auth_headers()?;
         let url = self.url("workspace_upload.php");
+        let safe_name = {
+            let cleaned: String = filename
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' ') {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let t = cleaned.trim().trim_matches('.');
+            if t.is_empty() {
+                "fichier.bin".to_string()
+            } else {
+                t.to_string()
+            }
+        };
+        let mime_clean = {
+            let m = mime.unwrap_or("application/octet-stream").trim();
+            if m.is_empty() || !m.is_ascii() || m.bytes().any(|b| b <= 32) {
+                "application/octet-stream".to_string()
+            } else {
+                m.to_string()
+            }
+        };
         let file_part = reqwest::multipart::Part::bytes(bytes)
-            .file_name(filename.to_string())
-            .mime_str(mime.unwrap_or("application/octet-stream"))
-            .map_err(|e| e.to_string())?;
+            .file_name(safe_name)
+            .mime_str(&mime_clean)
+            .map_err(|e| format!("mime: {e}"))?;
         let mut form = reqwest::multipart::Form::new()
             .text("visibility", visibility.to_string())
             .text("token", raw.clone())
@@ -959,11 +985,11 @@ impl GestionClient {
             .timeout(std::time::Duration::from_secs(120))
             .send()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("réseau upload: {e}"))?;
         let status = res.status();
         let text = res.text().await.map_err(|e| e.to_string())?;
         if status.as_u16() == 401 {
-            return Err("Session Gestion expirée".into());
+            return Err("Session Gestion expirée — reconnecte-toi".into());
         }
         if !status.is_success() {
             let err = serde_json::from_str::<Value>(&text)
@@ -973,8 +999,15 @@ impl GestionClient {
                         .and_then(|e| e.as_str())
                         .map(|s| s.to_string())
                 })
-                .unwrap_or(text);
-            return Err(format!("upload HTTP {status}: {err}"));
+                .unwrap_or_else(|| {
+                    let snippet: String = text.chars().take(180).collect();
+                    if snippet.is_empty() {
+                        format!("HTTP {status}")
+                    } else {
+                        snippet
+                    }
+                });
+            return Err(format!("upload {status}: {err}"));
         }
         let parsed: Value = serde_json::from_str(&text).map_err(|e| {
             format!(

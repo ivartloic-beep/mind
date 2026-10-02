@@ -291,6 +291,43 @@ fn mime_from_path(path: &std::path::Path) -> String {
     .to_string()
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DroppedFileMeta {
+    pub filename: String,
+    pub mime: String,
+    pub size: u64,
+    pub path: String,
+}
+
+/// Métadonnées d’un fichier déposé (sans charger le contenu).
+#[tauri::command]
+pub fn peek_dropped_file(path: String) -> Result<DroppedFileMeta, String> {
+    let path_buf = std::path::PathBuf::from(path.trim());
+    if !path_buf.is_file() {
+        return Err("Ce n’est pas un fichier".into());
+    }
+    let meta = fs::metadata(&path_buf).map_err(|e| e.to_string())?;
+    if meta.len() > 25 * 1024 * 1024 {
+        return Err("Fichier trop volumineux (max 25 Mo)".into());
+    }
+    if meta.len() == 0 {
+        return Err("Fichier vide".into());
+    }
+    let filename = path_buf
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Nom de fichier manquant".to_string())?
+        .to_string();
+    Ok(DroppedFileMeta {
+        mime: mime_from_path(&path_buf),
+        size: meta.len(),
+        path: path_buf.to_string_lossy().into_owned(),
+        filename,
+    })
+}
+
 /// Lit un fichier déposé (drag-and-drop Tauri → chemins OS) pour l’upload Gestion.
 #[tauri::command]
 pub fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
@@ -321,48 +358,62 @@ pub fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
     })
 }
 
-/// Dépose un fichier dans le workspace Gestion (bureau ou projet).
-#[tauri::command]
-pub async fn gestion_upload_file(
-    app: AppHandle,
-    filename: String,
-    mime: Option<String>,
-    data_base64: String,
-    visibility: String,
-    project_id: Option<String>,
+fn sanitize_upload_filename(name: &str) -> String {
+    let trimmed = name.trim();
+    let base = std::path::Path::new(trimmed)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(trimmed);
+    let cleaned: String = base
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' ') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_matches('.');
+    if cleaned.is_empty() {
+        "fichier.bin".into()
+    } else {
+        cleaned.to_string()
+    }
+}
+
+async fn upload_bytes_to_gestion(
+    app: &AppHandle,
+    filename: &str,
+    mime: Option<&str>,
+    bytes: Vec<u8>,
+    visibility: &str,
+    project_id: Option<&str>,
 ) -> Result<GestionUploadReport, String> {
-    use base64::Engine;
-    let client = crate::gestion::try_client(&app)
+    let client = crate::gestion::try_client(app)
         .ok_or_else(|| "Connecte-toi à Gestion pour déposer un fichier".to_string())?;
     let vis = visibility.trim();
     if vis != "personal" && vis != "team" {
         return Err("visibility doit être personal ou team".into());
     }
     let pid = project_id
-        .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
     if vis == "team" && pid.is_none() {
         return Err("Choisis un projet pour déposer en team".into());
     }
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(data_base64.trim())
-        .map_err(|e| format!("base64: {e}"))?;
     if bytes.is_empty() {
         return Err("Fichier vide".into());
     }
     if bytes.len() > 25 * 1024 * 1024 {
         return Err("Fichier trop volumineux (max 25 Mo)".into());
     }
-    let name = filename.trim();
-    if name.is_empty() {
-        return Err("Nom de fichier manquant".into());
-    }
+    let name = sanitize_upload_filename(filename);
     let parsed = client
         .upload_workspace_file(
-            name,
-            mime.as_deref(),
+            &name,
+            mime,
             bytes,
             vis,
             pid.as_deref(),
@@ -377,11 +428,69 @@ pub async fn gestion_upload_file(
                 .or_else(|| id.as_i64().map(|n| n.to_string()))
         });
     Ok(GestionUploadReport {
-        filename: name.to_string(),
+        filename: name,
         visibility: vis.to_string(),
         project_id: pid,
         element_id,
     })
+}
+
+/// Dépose un fichier (base64) dans le workspace Gestion (bureau ou projet).
+#[tauri::command]
+pub async fn gestion_upload_file(
+    app: AppHandle,
+    filename: String,
+    mime: Option<String>,
+    data_base64: String,
+    visibility: String,
+    project_id: Option<String>,
+) -> Result<GestionUploadReport, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.trim())
+        .map_err(|e| format!("base64: {e}"))?;
+    upload_bytes_to_gestion(
+        &app,
+        &filename,
+        mime.as_deref(),
+        bytes,
+        &visibility,
+        project_id.as_deref(),
+    )
+    .await
+}
+
+/// Dépose un fichier depuis un chemin OS (drag-and-drop) — évite le aller-retour base64.
+#[tauri::command]
+pub async fn gestion_upload_file_path(
+    app: AppHandle,
+    path: String,
+    visibility: String,
+    project_id: Option<String>,
+) -> Result<GestionUploadReport, String> {
+    let path = std::path::PathBuf::from(path.trim());
+    if !path.is_file() {
+        return Err("Ce n’est pas un fichier".into());
+    }
+    let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() > 25 * 1024 * 1024 {
+        return Err("Fichier trop volumineux (max 25 Mo)".into());
+    }
+    let bytes = fs::read(&path).map_err(|e| format!("lecture: {e}"))?;
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("fichier.bin");
+    let mime = mime_from_path(&path);
+    upload_bytes_to_gestion(
+        &app,
+        filename,
+        Some(mime.as_str()),
+        bytes,
+        &visibility,
+        project_id.as_deref(),
+    )
+    .await
 }
 
 /// Ouvre Gestion sur une page (bureau | crm | projects).
