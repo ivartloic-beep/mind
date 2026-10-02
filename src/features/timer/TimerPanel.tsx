@@ -127,7 +127,8 @@ export function TimerPanel() {
   }, [minutes, soundEnabled]);
 
   useEffect(() => {
-    setPortalHost(document.querySelector(".panel-body"));
+    const el = document.querySelector(".panel-body");
+    setPortalHost(el instanceof HTMLElement ? el : null);
   }, []);
 
   useEffect(() => {
