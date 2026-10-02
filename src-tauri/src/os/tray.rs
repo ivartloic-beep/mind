@@ -6,14 +6,17 @@ use tauri::{
     AppHandle, Emitter, Manager, RunEvent,
 };
 
-use crate::windows::{capture, panel, postit};
+use crate::windows::{capture, gestion, panel, postit};
 use crate::windows::panel::PANEL_LABEL;
 
 const TRAY_ID: &str = "ma-tete-tray";
 
 /// Construit le tray au démarrage.
 pub fn init_tray(app: &AppHandle) -> Result<(), String> {
-    let open_panel = MenuItem::with_id(app, "open_panel", "Ouvrir le panneau", true, None::<&str>)
+    let open_gestion =
+        MenuItem::with_id(app, "open_gestion", "Ouvrir Gestion", true, None::<&str>)
+            .map_err(|e| e.to_string())?;
+    let open_panel = MenuItem::with_id(app, "open_panel", "Ouvrir le panneau MIND", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let new_task = MenuItem::with_id(app, "new_task", "Nouvelle tâche", true, None::<&str>)
         .map_err(|e| e.to_string())?;
@@ -37,6 +40,7 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
     let menu = Menu::with_items(
         app,
         &[
+            &open_gestion,
             &open_panel,
             &sep1,
             &new_task,
@@ -59,10 +63,15 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .tooltip("Ma Tête")
+        .tooltip("MIND")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
+            "open_gestion" => {
+                if let Err(err) = gestion::show_gestion(app) {
+                    eprintln!("tray open_gestion: {err}");
+                }
+            }
             "open_panel" => show_panel(app, true),
             "new_task" => open_capture(app, "task"),
             "new_note" => open_capture(app, "note"),
@@ -80,7 +89,6 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
             }
             "settings" => {
                 show_panel(app, true);
-                let _ = crate::windows::library::library_show(app.clone());
                 let _ = app.emit("panel-focus-settings", ());
             }
             "quit" => {
@@ -96,7 +104,9 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
                 ..
             } = event
             {
-                show_panel(tray.app_handle(), true);
+                if let Err(err) = gestion::show_gestion(tray.app_handle()) {
+                    eprintln!("tray click gestion: {err}");
+                }
             }
         })
         .build(app)
@@ -105,9 +115,12 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Au second lancement (single-instance) : focus panneau.
+/// Au second lancement (single-instance) : focus Gestion.
 pub fn focus_existing_instance(app: &AppHandle) {
-    show_panel(app, true);
+    if let Err(err) = gestion::show_gestion(app) {
+        eprintln!("focus_existing_instance: {err}");
+        show_panel(app, true);
+    }
 }
 
 /// Garde le process vivant pour le tray quand une fenêtre se ferme.

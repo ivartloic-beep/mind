@@ -28,6 +28,11 @@ import {
   listenReminderOpenTask,
   type ReminderDuePayload,
 } from "../../services/events";
+import {
+  gestionGetConfig,
+  gestionSetConfig,
+  gestionShow,
+} from "../../services/gestion";
 import { libraryShow } from "../../services/library";
 import {
   panelGetState,
@@ -94,6 +99,9 @@ export function PanelApp() {
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [shortcuts, setShortcuts] = useState<ShortcutInfo[]>([]);
+  const [gestionApiUrl, setGestionApiUrl] = useState("");
+  const [gestionBusy, setGestionBusy] = useState(false);
+  const [gestionMsg, setGestionMsg] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloudEdit, setCloudEdit] = useState(false);
   const [, startTransition] = useTransition();
@@ -134,6 +142,8 @@ export function PanelApp() {
         }
         const keys = await listShortcuts();
         if (!cancelled) setShortcuts(keys);
+        const g = await gestionGetConfig();
+        if (!cancelled) setGestionApiUrl(g.apiUrl || "");
       } catch {
         /* ignore */
       }
@@ -526,6 +536,64 @@ export function PanelApp() {
 
             <div className="panel-settings-group">
               <div className="panel-settings-group-head">
+                <h3>Gestion (app complète)</h3>
+              </div>
+              <p className="panel-muted">
+                URL de l’API PHP gestion-v2 (sans slash final).
+              </p>
+              <label className="panel-field">
+                <span>API Gestion</span>
+                <input
+                  type="url"
+                  className="panel-input"
+                  value={gestionApiUrl}
+                  disabled={gestionBusy}
+                  placeholder="https://exemple.fr/api"
+                  autoComplete="off"
+                  onChange={(e) => setGestionApiUrl(e.target.value)}
+                />
+              </label>
+              <div className="panel-actions">
+                <button
+                  type="button"
+                  className="panel-action-btn is-primary"
+                  disabled={gestionBusy || !gestionApiUrl.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      setGestionBusy(true);
+                      setGestionMsg(null);
+                      try {
+                        const cfg = await gestionSetConfig(gestionApiUrl.trim());
+                        setGestionApiUrl(cfg.apiUrl);
+                        setGestionMsg("API Gestion enregistrée");
+                      } catch (err) {
+                        setGestionMsg(
+                          err instanceof Error
+                            ? err.message
+                            : "Enregistrement impossible",
+                        );
+                      } finally {
+                        setGestionBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  Enregistrer
+                </button>
+                <button
+                  type="button"
+                  className="panel-action-btn"
+                  disabled={gestionBusy}
+                  onClick={() => void gestionShow()}
+                >
+                  Ouvrir Gestion
+                </button>
+              </div>
+              {gestionMsg && <p className="panel-muted">{gestionMsg}</p>}
+            </div>
+
+            <div className="panel-settings-group">
+              <div className="panel-settings-group-head">
                 <h3>Raccourcis clavier</h3>
               </div>
               {shortcuts.length === 0 ? (
@@ -593,6 +661,13 @@ export function PanelApp() {
                   onClick={() => void libraryShow()}
                 >
                   Bibliothèque
+                </button>
+                <button
+                  type="button"
+                  className="panel-action-btn is-primary"
+                  onClick={() => void gestionShow()}
+                >
+                  Gestion
                 </button>
               </div>
             </section>

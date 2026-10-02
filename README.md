@@ -21,6 +21,7 @@ Nom provisoire : **Ma Tête**.
 - **Étape 12** : tray + menu, autostart ON, single-instance, boot sans flash
 - **UX** : capture fermable (✕/Échap) · post-its autonomes (CTRL+ALT+P, croix=supprimer, CTRL+ALT+H masquer/réafficher) · panneau compact + Bibliothèque (réouvrable) · minuteur durée libre (+5 min)
 - **Cloud** : sync optionnelle vers `https://mind.louetline.fr` (Réglages → token + Synchroniser)
+- **Phase 1 Gestion** : shell Windows embarque le front `gestion-v2` (`public/gestion/`), sans messagerie/mails, Événementiel → Production. Configurer l’URL API PHP dans Paramètres MIND. Voir `docs/ROADMAP-GESTION-WINDOWS.md`.
 
 V1 desktop + polish UX. Test réel Windows recommandé via installateur **NSIS**.
 

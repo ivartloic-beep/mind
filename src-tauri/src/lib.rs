@@ -52,6 +52,10 @@ pub fn run() {
             if let Err(err) = windows::postit::restore_open_postits(app.handle()) {
                 eprintln!("postit restore: {err}");
             }
+            // Shell Gestion (front embarqué) — ouvert sauf autostart discret.
+            if let Err(err) = windows::gestion::init_gestion(app.handle(), autostart_launch) {
+                eprintln!("gestion init: {err}");
+            }
 
             os::notifications::start_reminder_scheduler(app.handle().clone());
             sync::start_sync_scheduler(app.handle().clone());
@@ -108,6 +112,9 @@ pub fn run() {
             windows::capture::capture_show,
             windows::capture::capture_hide,
             windows::library::library_show,
+            windows::gestion::gestion_show,
+            windows::gestion::gestion_get_config,
+            windows::gestion::gestion_set_config,
             windows::postit::create_scratch_postit,
             windows::postit::postit_open_for_note,
             windows::postit::postit_close,
