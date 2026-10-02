@@ -88,7 +88,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\create-desktop-sho
 ```
 
 - **Mettre a jour MIND** — `git pull` + `npm install`  
-- **Ouvrir MIND** — lance l’exe (ou `desktop:dev` s’il n’existe pas encore)
+- **Ouvrir MIND** — lance `desktop:dev` (code Git à jour)  
+- **Arreter MIND** — ferme toutes les instances
 
 ## Entries frontend
 
