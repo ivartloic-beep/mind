@@ -27,10 +27,12 @@
 - Login depuis Paramètres panneau, ou session reprise depuis la WebView Gestion.
 - Import one-shot : bouton « Importer tâches locales ».
 - Fiche tâche riche (docs / activités / assignation) via UI Gestion.
+- Capture tâche : mêmes champs Gestion (description, priorité, échéance, statut, notes, projet → category).
+- Projets MIND ↔ `work_projects.php` (liste / création / rename / delete + sync au login).
 
 ### Phase 3 — Durcissement (en cours)
 
-- Cache SQLite si l’API `personal_tasks` est injoignable (lecture + écriture locale, `lastError` en prefs).
+- Cache SQLite si l’API `personal_tasks` / `work_projects` est injoignable (lecture + écriture locale, `lastError` en prefs).
 - Réécriture React **par module** seulement si le WebView limite (Bureau, Production…).
 
 ## Config
