@@ -52,6 +52,11 @@
   outline: none;
 }
 
+.postit-body-full {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
 .postit-tasks {
   display: flex;
   flex-direction: column;

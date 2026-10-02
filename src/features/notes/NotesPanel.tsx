@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createNote, upsertNote } from "../../services/api";
-import { postitOpenForNote } from "../../services/postit";
 import type { Note, Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 
@@ -19,7 +18,6 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [postitBusy, setPostitBusy] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
@@ -93,30 +91,6 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
       setDraftTitle("");
       setDraftBody("");
       setDraftProjectId(null);
-    }
-  }
-
-  async function openAsPostit() {
-    if (!selected || creating || postitBusy) return;
-    setPostitBusy(true);
-    setSaveError(null);
-    try {
-      // Enregistrer d'abord les brouillons pour que le post-it voie le contenu à jour.
-      const title = draftTitle.trim() || null;
-      const body = draftBody.trim();
-      if (body) {
-        await upsertNote({
-          ...selected,
-          title: title ?? undefined,
-          body,
-          projectId: draftProjectId,
-        });
-      }
-      await postitOpenForNote(selected.id);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Ouverture post-it impossible");
-    } finally {
-      setPostitBusy(false);
     }
   }
 
@@ -209,20 +183,10 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
             >
               {saving ? "…" : "Enregistrer"}
             </button>
-            {!creating && selected && (
-              <button
-                type="button"
-                className="notes-postit-btn"
-                disabled={saving || postitBusy || !draftBody.trim()}
-                onClick={() => void openAsPostit()}
-              >
-                {postitBusy ? "…" : "Post-it"}
-              </button>
-            )}
             <button
               type="button"
               className="notes-cancel-btn"
-              disabled={saving || postitBusy}
+              disabled={saving}
               onClick={cancelEdit}
             >
               {creating ? "Annuler" : "Fermer"}

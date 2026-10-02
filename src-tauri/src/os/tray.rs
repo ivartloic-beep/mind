@@ -6,9 +6,6 @@ use tauri::{
     AppHandle, Emitter, Manager, RunEvent,
 };
 
-use crate::domain::{new_id, now_iso, DataChangedPayload, Note, NoteKind};
-use crate::state::AppState;
-use crate::storage::Storage;
 use crate::windows::{capture, panel, postit};
 use crate::windows::panel::PANEL_LABEL;
 
@@ -83,6 +80,7 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
             }
             "settings" => {
                 show_panel(app, true);
+                let _ = crate::windows::library::library_show(app.clone());
                 let _ = app.emit("panel-focus-settings", ());
             }
             "quit" => {
@@ -142,29 +140,5 @@ fn open_capture(app: &AppHandle, kind: &str) {
 }
 
 fn open_new_postit(app: &AppHandle) -> Result<(), String> {
-    let state = app.state::<AppState>();
-    let now = now_iso();
-    let note_id = new_id();
-    let note = Note {
-        id: note_id.clone(),
-        title: Some("Post-it".into()),
-        body: String::new(),
-        kind: NoteKind::Note,
-        project_id: None,
-        created_at: now.clone(),
-        updated_at: now,
-    };
-    state
-        .storage
-        .upsert_note(&note)
-        .map_err(|e| e.to_string())?;
-    let _ = app.emit(
-        "data-changed",
-        DataChangedPayload {
-            entity: "note".into(),
-            id: note_id.clone(),
-        },
-    );
-    postit::open_for_note_id(app, &note_id)?;
-    Ok(())
+    postit::create_scratch_postit(app.clone()).map(|_| ())
 }

@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWi
 
 pub const CAPTURE_LABEL: &str = "capture";
 const CAPTURE_WIDTH: f64 = 440.0;
-const CAPTURE_HEIGHT: f64 = 168.0;
+const CAPTURE_HEIGHT: f64 = 200.0;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

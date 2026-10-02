@@ -87,7 +87,9 @@ impl LocalStorage {
 
                 CREATE TABLE IF NOT EXISTS postits (
                   id TEXT PRIMARY KEY NOT NULL,
-                  note_id TEXT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+                  note_id TEXT,
+                  title TEXT,
+                  body TEXT NOT NULL DEFAULT '',
                   x REAL NOT NULL,
                   y REAL NOT NULL,
                   w REAL NOT NULL,
@@ -104,6 +106,7 @@ impl LocalStorage {
             )?;
             migrate_tasks_columns(conn)?;
             migrate_notes_columns(conn)?;
+            migrate_postits_autonomous(conn)?;
             Ok(())
         })
     }
@@ -151,6 +154,39 @@ fn migrate_tasks_columns(conn: &Connection) -> StorageResult<()> {
 
 fn migrate_notes_columns(conn: &Connection) -> StorageResult<()> {
     ensure_column(conn, "notes", "title", "title TEXT")?;
+    Ok(())
+}
+
+/// Post-its autonomes : body/title + note_id nullable (rebuild une fois).
+fn migrate_postits_autonomous(conn: &Connection) -> StorageResult<()> {
+    let cols = table_columns(conn, "postits")?;
+    if cols.iter().any(|c| c == "body") {
+        return Ok(());
+    }
+    conn.execute_batch(
+        "
+        CREATE TABLE postits_new (
+          id TEXT PRIMARY KEY NOT NULL,
+          note_id TEXT,
+          title TEXT,
+          body TEXT NOT NULL DEFAULT '',
+          x REAL NOT NULL,
+          y REAL NOT NULL,
+          w REAL NOT NULL,
+          h REAL NOT NULL,
+          always_on_top INTEGER NOT NULL DEFAULT 1,
+          open INTEGER NOT NULL DEFAULT 1
+        );
+        INSERT INTO postits_new (id, note_id, title, body, x, y, w, h, always_on_top, open)
+        SELECT p.id, p.note_id, NULL,
+               COALESCE((SELECT n.body FROM notes n WHERE n.id = p.note_id), ''),
+               p.x, p.y, p.w, p.h, p.always_on_top, p.open
+        FROM postits p;
+        DROP TABLE postits;
+        ALTER TABLE postits_new RENAME TO postits;
+        CREATE INDEX IF NOT EXISTS idx_postits_note ON postits(note_id);
+        ",
+    )?;
     Ok(())
 }
 
@@ -431,7 +467,7 @@ impl Storage for LocalStorage {
     fn list_postits(&self, filter: &PostItFilter) -> StorageResult<Vec<PostIt>> {
         self.with_conn(|conn| {
             let mut sql = String::from(
-                "SELECT id, note_id, x, y, w, h, always_on_top, open FROM postits WHERE 1=1",
+                "SELECT id, note_id, title, body, x, y, w, h, always_on_top, open FROM postits WHERE 1=1",
             );
             let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
             if let Some(ref note_id) = filter.note_id {
@@ -454,7 +490,7 @@ impl Storage for LocalStorage {
     fn get_postit(&self, id: &str) -> StorageResult<Option<PostIt>> {
         self.with_conn(|conn| {
             conn.query_row(
-                "SELECT id, note_id, x, y, w, h, always_on_top, open FROM postits WHERE id = ?1",
+                "SELECT id, note_id, title, body, x, y, w, h, always_on_top, open FROM postits WHERE id = ?1",
                 params![id],
                 map_postit,
             )
@@ -466,10 +502,12 @@ impl Storage for LocalStorage {
     fn upsert_postit(&self, postit: &PostIt) -> StorageResult<()> {
         self.with_conn(|conn| {
             conn.execute(
-                "INSERT INTO postits (id, note_id, x, y, w, h, always_on_top, open)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                "INSERT INTO postits (id, note_id, title, body, x, y, w, h, always_on_top, open)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(id) DO UPDATE SET
                    note_id = excluded.note_id,
+                   title = excluded.title,
+                   body = excluded.body,
                    x = excluded.x,
                    y = excluded.y,
                    w = excluded.w,
@@ -479,6 +517,8 @@ impl Storage for LocalStorage {
                 params![
                     postit.id,
                     postit.note_id,
+                    postit.title,
+                    postit.body,
                     postit.x,
                     postit.y,
                     postit.w,
@@ -553,15 +593,19 @@ fn map_reminder(row: &rusqlite::Row<'_>) -> rusqlite::Result<Reminder> {
 }
 
 fn map_postit(row: &rusqlite::Row<'_>) -> rusqlite::Result<PostIt> {
+    let note_id: Option<String> = row.get(1)?;
+    let note_id = note_id.filter(|s| !s.is_empty());
     Ok(PostIt {
         id: row.get(0)?,
-        note_id: row.get(1)?,
-        x: row.get(2)?,
-        y: row.get(3)?,
-        w: row.get(4)?,
-        h: row.get(5)?,
-        always_on_top: row.get::<_, i32>(6)? != 0,
-        open: row.get::<_, i32>(7)? != 0,
+        note_id,
+        title: row.get(2)?,
+        body: row.get(3)?,
+        x: row.get(4)?,
+        y: row.get(5)?,
+        w: row.get(6)?,
+        h: row.get(7)?,
+        always_on_top: row.get::<_, i32>(8)? != 0,
+        open: row.get::<_, i32>(9)? != 0,
     })
 }
 
@@ -619,7 +663,9 @@ mod tests {
 
             let postit = PostIt {
                 id: new_id(),
-                note_id: note.id.clone(),
+                note_id: None,
+                title: None,
+                body: "Pensée rapide".into(),
                 x: 40.0,
                 y: 80.0,
                 w: 240.0,

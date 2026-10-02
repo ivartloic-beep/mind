@@ -123,9 +123,22 @@ export function CaptureApp() {
 
   return (
     <main className="capture-root">
-      <label className="capture-prompt" htmlFor="capture-input">
-        Qu&apos;est-ce que tu veux retenir ?
-      </label>
+      <div className="capture-top">
+        <label className="capture-prompt" htmlFor="capture-input">
+          Qu&apos;est-ce que tu veux retenir ?
+        </label>
+        <button
+          type="button"
+          className="capture-close"
+          aria-label="Fermer (Échap)"
+          title="Fermer (Échap)"
+          disabled={busy}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void closeCapture()}
+        >
+          ✕
+        </button>
+      </div>
       <input
         id="capture-input"
         ref={inputRef}
@@ -134,7 +147,7 @@ export function CaptureApp() {
         value={text}
         autoFocus
         disabled={busy}
-        placeholder="Écris, puis Entrée…"
+        placeholder="Écris, puis Entrée — Échap pour fermer"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -174,6 +187,7 @@ export function CaptureApp() {
           {busy ? "…" : "Entrée"}
         </button>
       </div>
+      <p className="capture-hint">Échap ou ✕ pour fermer sans créer</p>
       {error && <p className="capture-error">{error}</p>}
     </main>
   );

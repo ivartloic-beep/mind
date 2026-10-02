@@ -102,6 +102,8 @@ pub fn run() {
             windows::panel::panel_redock,
             windows::capture::capture_show,
             windows::capture::capture_hide,
+            windows::library::library_show,
+            windows::postit::create_scratch_postit,
             windows::postit::postit_open_for_note,
             windows::postit::postit_close,
             windows::postit::postit_update_geometry,

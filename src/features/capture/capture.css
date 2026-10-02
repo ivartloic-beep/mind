@@ -10,11 +10,48 @@
   border: 1px solid var(--border);
 }
 
+.capture-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .capture-prompt {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+.capture-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  cursor: pointer;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+.capture-close:hover:not(:disabled) {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.capture-close:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.capture-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 .capture-input {

@@ -15,6 +15,7 @@ export default defineConfig(() => ({
         panel: "panel.html",
         capture: "capture.html",
         postit: "postit.html",
+        library: "library.html",
       },
     },
   },

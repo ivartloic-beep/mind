@@ -47,10 +47,12 @@ export type Reminder = {
   snoozedUntil?: string;
 };
 
-/** Fenêtre post-it liée à une Note (pas de copie de contenu). */
+/** Post-it autonome (pensée immédiate). `noteId` = legacy optionnel. */
 export type PostIt = {
   id: string;
-  noteId: string;
+  noteId?: string;
+  title?: string;
+  body: string;
   x: number;
   y: number;
   w: number;

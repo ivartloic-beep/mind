@@ -1,4 +1,4 @@
-//! Fenêtres post-it natives `postit-{id}` — liées à une Note, géométrie persistée.
+//! Fenêtres post-it natives `postit-{id}` — pensées immédiates autonomes.
 
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewUrl, WebviewWindow,
@@ -53,7 +53,7 @@ fn ensure_window(app: &AppHandle, postit: &PostIt) -> Result<WebviewWindow, Stri
 
     let url = WebviewUrl::App(format!("postit.html?postitId={}", postit.id).into());
     let window = WebviewWindowBuilder::new(app, &label, url)
-        .title("Ma Tête — Post-it")
+        .title("MIND — Post-it")
         .inner_size(postit.w.max(200.0), postit.h.max(160.0))
         .position(postit.x, postit.y)
         .resizable(true)
@@ -99,33 +99,60 @@ fn find_for_note(state: &AppState, note_id: &str) -> Result<Option<PostIt>, Stri
     Ok(rows.into_iter().next())
 }
 
-/// Ouvre (ou crée) un post-it pour une Note — une entité PostIt liée, pas de copie de contenu.
+/// Crée un post-it scratch vide, toujours au-dessus, et l’ouvre.
 #[tauri::command]
-pub fn postit_open_for_note(
-    app: AppHandle,
-    note_id: String,
-) -> Result<PostIt, String> {
+pub fn create_scratch_postit(app: AppHandle) -> Result<PostIt, String> {
+    let state = app.state::<AppState>();
+    let offset = cascade_offset(&app);
+    let postit = PostIt {
+        id: new_id(),
+        note_id: None,
+        title: None,
+        body: String::new(),
+        x: 80.0 + offset,
+        y: 80.0 + offset,
+        w: DEFAULT_W,
+        h: DEFAULT_H,
+        always_on_top: true,
+        open: true,
+    };
+    state
+        .storage
+        .upsert_postit(&postit)
+        .map_err(|e| e.to_string())?;
+    ensure_window(&app, &postit)?;
+    let _ = app.emit(
+        "data-changed",
+        DataChangedPayload {
+            entity: "postit".into(),
+            id: postit.id.clone(),
+        },
+    );
+    Ok(postit)
+}
+
+/// Legacy : ouvre (ou crée) un post-it pour une Note.
+#[tauri::command]
+pub fn postit_open_for_note(app: AppHandle, note_id: String) -> Result<PostIt, String> {
     open_for_note_id(&app, &note_id)
 }
 
-/// Helper tray / commands — ouvre le post-it d’une note.
 pub fn open_for_note_id(app: &AppHandle, note_id: &str) -> Result<PostIt, String> {
     let state = app.state::<AppState>();
-    if state
+    let note = state
         .storage
         .get_note(note_id)
         .map_err(|e| e.to_string())?
-        .is_none()
-    {
-        return Err(format!("note introuvable: {note_id}"));
-    }
+        .ok_or_else(|| format!("note introuvable: {note_id}"))?;
 
     let offset = cascade_offset(app);
     let mut postit = match find_for_note(&state, note_id)? {
         Some(existing) => existing,
         None => PostIt {
             id: new_id(),
-            note_id: note_id.to_string(),
+            note_id: Some(note_id.to_string()),
+            title: note.title.clone(),
+            body: note.body.clone(),
             x: 80.0 + offset,
             y: 80.0 + offset,
             w: DEFAULT_W,
@@ -135,6 +162,9 @@ pub fn open_for_note_id(app: &AppHandle, note_id: &str) -> Result<PostIt, String
         },
     };
     postit.open = true;
+    if postit.body.is_empty() {
+        postit.body = note.body;
+    }
     if postit.w < 200.0 {
         postit.w = DEFAULT_W;
     }
@@ -156,31 +186,57 @@ pub fn open_for_note_id(app: &AppHandle, note_id: &str) -> Result<PostIt, String
     Ok(postit)
 }
 
-/// Ferme le post-it (persiste open=false + géométrie) sans supprimer l'entité.
+/// Croix / fermeture : détruit la fenêtre et **supprime** le post-it.
 #[tauri::command]
 pub fn postit_close(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
-    let mut postit = state
+    let postit = state
         .storage
         .get_postit(&id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("postit introuvable: {id}"))?;
 
     if let Some(window) = app.get_webview_window(&label_for(&id)) {
-        if let Ok((x, y, w, h)) = read_geometry(&window) {
-            postit.x = x;
-            postit.y = y;
-            postit.w = w;
-            postit.h = h;
-        }
         let _ = window.hide();
         let _ = window.destroy();
     }
 
-    postit.open = false;
+    let legacy_note = postit.note_id.clone();
     state
         .storage
-        .upsert_postit(&postit)
+        .delete_postit(&id)
         .map_err(|e| e.to_string())?;
+    let _ = app.emit(
+        "data-changed",
+        DataChangedPayload {
+            entity: "postit".into(),
+            id: id.clone(),
+        },
+    );
+
+    // Nettoie une note orpheline créée uniquement pour un ancien post-it tray.
+    if let Some(note_id) = legacy_note {
+        let still_linked = state
+            .storage
+            .list_postits(&PostItFilter {
+                note_id: Some(note_id.clone()),
+                ..Default::default()
+            })
+            .map_err(|e| e.to_string())?;
+        if still_linked.is_empty() {
+            if let Ok(Some(note)) = state.storage.get_note(&note_id) {
+                if note.title.as_deref() == Some("Post-it") && note.body.is_empty() {
+                    let _ = state.storage.delete_note(&note_id);
+                    let _ = app.emit(
+                        "data-changed",
+                        DataChangedPayload {
+                            entity: "note".into(),
+                            id: note_id,
+                        },
+                    );
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -232,16 +288,4 @@ pub fn postit_set_always_on_top(
             .map_err(|e| e.to_string())?;
     }
     Ok(postit)
-}
-
-fn read_geometry(window: &WebviewWindow) -> Result<(f64, f64, f64, f64), String> {
-    let scale = window.scale_factor().map_err(|e| e.to_string())?;
-    let pos = window.outer_position().map_err(|e| e.to_string())?;
-    let size = window.outer_size().map_err(|e| e.to_string())?;
-    Ok((
-        pos.x as f64 / scale,
-        pos.y as f64 / scale,
-        size.width as f64 / scale,
-        size.height as f64 / scale,
-    ))
 }

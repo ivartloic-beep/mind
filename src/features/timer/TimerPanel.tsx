@@ -1,5 +1,5 @@
 /**
- * Minuteur panneau — 25/5 par défaut, notif + indication visuelle à zéro.
+ * Minuteur durée libre — démarrer / pause / +5 min à la fin.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,14 +11,12 @@ import {
 } from "@tauri-apps/plugin-notification";
 import "./timer.css";
 
-type Mode = "work" | "break";
 type Status = "idle" | "running" | "paused" | "finished";
 
 const STORAGE_KEY = "ma-tete.timer.prefs";
 
 type Prefs = {
-  workMinutes: number;
-  breakMinutes: number;
+  minutes: number;
   soundEnabled: boolean;
 };
 
@@ -26,16 +24,18 @@ function loadPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { workMinutes: 25, breakMinutes: 5, soundEnabled: true };
+      return { minutes: 10, soundEnabled: true };
     }
-    const parsed = JSON.parse(raw) as Partial<Prefs>;
+    const parsed = JSON.parse(raw) as Partial<Prefs> & {
+      workMinutes?: number;
+    };
+    const minutes = clampMinutes(parsed.minutes ?? parsed.workMinutes ?? 10);
     return {
-      workMinutes: clampMinutes(parsed.workMinutes ?? 25),
-      breakMinutes: clampMinutes(parsed.breakMinutes ?? 5),
+      minutes,
       soundEnabled: parsed.soundEnabled ?? true,
     };
   } catch {
-    return { workMinutes: 25, breakMinutes: 5, soundEnabled: true };
+    return { minutes: 10, soundEnabled: true };
   }
 }
 
@@ -44,7 +44,7 @@ function savePrefs(prefs: Prefs) {
 }
 
 function clampMinutes(value: number): number {
-  if (!Number.isFinite(value)) return 25;
+  if (!Number.isFinite(value)) return 10;
   return Math.min(180, Math.max(1, Math.round(value)));
 }
 
@@ -75,11 +75,11 @@ function playBeep() {
     osc.stop(ctx.currentTime + 0.4);
     window.setTimeout(() => void ctx.close(), 500);
   } catch {
-    /* son optionnel — skip silencieux */
+    /* son optionnel */
   }
 }
 
-async function notifyDone(mode: Mode) {
+async function notifyDone() {
   try {
     let granted = await isPermissionGranted();
     if (!granted) {
@@ -89,37 +89,29 @@ async function notifyDone(mode: Mode) {
     if (!granted) return;
     await sendNotification({
       title: "Ma Tête — Minuteur",
-      body:
-        mode === "work"
-          ? "Session de travail terminée. Pause ?"
-          : "Pause terminée. Au travail ?",
+      body: "Temps écoulé.",
     });
   } catch {
-    /* notif indisponible hors Tauri / permissions */
+    /* hors Tauri */
   }
 }
 
 export function TimerPanel() {
   const initial = useMemo(() => loadPrefs(), []);
-  const [workMinutes, setWorkMinutes] = useState(initial.workMinutes);
-  const [breakMinutes, setBreakMinutes] = useState(initial.breakMinutes);
+  const [minutes, setMinutes] = useState(initial.minutes);
   const [soundEnabled, setSoundEnabled] = useState(initial.soundEnabled);
-  const [mode, setMode] = useState<Mode>("work");
   const [status, setStatus] = useState<Status>("idle");
-  const [remaining, setRemaining] = useState(initial.workMinutes * 60);
-  const modeRef = useRef(mode);
+  const [remaining, setRemaining] = useState(initial.minutes * 60);
   const soundRef = useRef(soundEnabled);
-  modeRef.current = mode;
-  soundRef.current = soundEnabled;
-
-  useEffect(() => {
-    savePrefs({ workMinutes, breakMinutes, soundEnabled });
-  }, [workMinutes, breakMinutes, soundEnabled]);
-
   const statusRef = useRef(status);
   const remainingRef = useRef(remaining);
+  soundRef.current = soundEnabled;
   statusRef.current = status;
   remainingRef.current = remaining;
+
+  useEffect(() => {
+    savePrefs({ minutes, soundEnabled });
+  }, [minutes, soundEnabled]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -136,29 +128,15 @@ export function TimerPanel() {
         setStatus("running");
         return;
       }
-      // idle / finished — même logique que le bouton Démarrer
-      if (prev === "finished" || prev === "idle") {
-        const next =
-          prev === "finished"
-            ? modeRef.current === "work"
-              ? "break"
-              : "work"
-            : modeRef.current;
-        setMode(next);
-        setRemaining(
-          (next === "work" ? workMinutes : breakMinutes) * 60,
-        );
-      } else if (remainingRef.current <= 0) {
-        setRemaining(
-          (modeRef.current === "work" ? workMinutes : breakMinutes) * 60,
-        );
+      if (prev === "finished" || remainingRef.current <= 0) {
+        setRemaining(minutes * 60);
       }
       setStatus("running");
     }).then((fn) => {
       unlisten = fn;
     });
     return () => unlisten?.();
-  }, [workMinutes, breakMinutes]);
+  }, [minutes]);
 
   useEffect(() => {
     if (status !== "running") return;
@@ -166,9 +144,8 @@ export function TimerPanel() {
       setRemaining((prev) => {
         if (prev <= 1) {
           window.clearInterval(id);
-          const finishedMode = modeRef.current;
           setStatus("finished");
-          void notifyDone(finishedMode);
+          void notifyDone();
           if (soundRef.current) playBeep();
           return 0;
         }
@@ -178,19 +155,17 @@ export function TimerPanel() {
     return () => window.clearInterval(id);
   }, [status]);
 
-  function durationFor(next: Mode): number {
-    return (next === "work" ? workMinutes : breakMinutes) * 60;
+  function applyMinutes(value: number) {
+    const mins = clampMinutes(value);
+    setMinutes(mins);
+    if (status === "idle") {
+      setRemaining(mins * 60);
+    }
   }
 
   function start() {
-    if (status === "finished" || status === "idle") {
-      // Après fin : enchaîne sur l'autre mode.
-      const next =
-        status === "finished" ? (mode === "work" ? "break" : "work") : mode;
-      setMode(next);
-      setRemaining(durationFor(next));
-    } else if (remaining <= 0) {
-      setRemaining(durationFor(mode));
+    if (status === "finished" || remaining <= 0) {
+      setRemaining(minutes * 60);
     }
     setStatus("running");
   }
@@ -205,49 +180,26 @@ export function TimerPanel() {
 
   function stop() {
     setStatus("idle");
-    setRemaining(durationFor(mode));
+    setRemaining(minutes * 60);
   }
 
-  function reset() {
-    const next =
-      status === "finished" ? (mode === "work" ? "break" : "work") : mode;
-    setMode(next);
-    setStatus("idle");
-    setRemaining(durationFor(next));
+  function addFiveMinutes() {
+    setRemaining((prev) => prev + 5 * 60);
+    setStatus("running");
   }
-
-  function applyWorkMinutes(value: number) {
-    const mins = clampMinutes(value);
-    setWorkMinutes(mins);
-    if (status === "idle" && mode === "work") {
-      setRemaining(mins * 60);
-    }
-  }
-
-  function applyBreakMinutes(value: number) {
-    const mins = clampMinutes(value);
-    setBreakMinutes(mins);
-    if (status === "idle" && mode === "break") {
-      setRemaining(mins * 60);
-    }
-  }
-
-  function switchMode(next: Mode) {
-    if (status === "running" || status === "paused") return;
-    setMode(next);
-    setStatus("idle");
-    setRemaining(durationFor(next));
-  }
-
-  const label = mode === "work" ? "Travail" : "Pause";
 
   return (
     <div className={`timer-panel ${status === "finished" ? "is-finished" : ""}`}>
       <div className="timer-display" aria-live="polite">
         <span className="timer-clock">⏱ {formatMmSs(remaining)}</span>
         <span className="timer-mode">
-          {label}
-          {status === "finished" ? " — terminé" : ""}
+          {status === "finished"
+            ? "Terminé"
+            : status === "running"
+              ? "En cours"
+              : status === "paused"
+                ? "En pause"
+                : "Prêt"}
         </span>
       </div>
 
@@ -273,52 +225,27 @@ export function TimerPanel() {
         >
           Arrêter
         </button>
-        <button type="button" className="timer-btn" onClick={reset}>
-          Réinit.
-        </button>
-      </div>
-
-      <div className="timer-modes">
-        <button
-          type="button"
-          className={`timer-chip ${mode === "work" ? "is-active" : ""}`}
-          disabled={status === "running" || status === "paused"}
-          onClick={() => switchMode("work")}
-        >
-          Travail
-        </button>
-        <button
-          type="button"
-          className={`timer-chip ${mode === "break" ? "is-active" : ""}`}
-          disabled={status === "running" || status === "paused"}
-          onClick={() => switchMode("break")}
-        >
-          Pause
-        </button>
+        {status === "finished" && (
+          <button
+            type="button"
+            className="timer-btn is-primary"
+            onClick={addFiveMinutes}
+          >
+            +5 min
+          </button>
+        )}
       </div>
 
       <div className="timer-durations">
         <label>
-          Travail
+          Durée
           <input
             type="number"
             min={1}
             max={180}
-            value={workMinutes}
+            value={minutes}
             disabled={status === "running" || status === "paused"}
-            onChange={(e) => applyWorkMinutes(Number(e.target.value))}
-          />
-          <span>min</span>
-        </label>
-        <label>
-          Pause
-          <input
-            type="number"
-            min={1}
-            max={180}
-            value={breakMinutes}
-            disabled={status === "running" || status === "paused"}
-            onChange={(e) => applyBreakMinutes(Number(e.target.value))}
+            onChange={(e) => applyMinutes(Number(e.target.value))}
           />
           <span>min</span>
         </label>
@@ -330,7 +257,7 @@ export function TimerPanel() {
           checked={soundEnabled}
           onChange={(e) => setSoundEnabled(e.target.checked)}
         />
-        <span>Son à la fin (simple)</span>
+        <span>Son à la fin</span>
       </label>
     </div>
   );

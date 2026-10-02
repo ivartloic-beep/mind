@@ -136,12 +136,18 @@ pub struct Reminder {
     pub snoozed_until: Option<String>,
 }
 
-/// Fenêtre post-it liée à une `Note` (pas de duplication de contenu).
+/// Post-it autonome (pensée immédiate) — contenu dans `body`.
+/// `note_id` optionnel : legacy des anciennes liaisons Note.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PostIt {
     pub id: String,
-    pub note_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub body: String,
     pub x: f64,
     pub y: f64,
     pub w: f64,

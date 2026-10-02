@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities for Ma Tête windows",
-  "windows": ["main", "panel", "capture", "postit-*"],
+  "windows": ["main", "panel", "capture", "library", "postit-*"],
   "permissions": [
     "core:default",
     "core:event:default",

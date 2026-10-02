@@ -5,11 +5,17 @@ function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+export async function createScratchPostit(): Promise<PostIt | null> {
+  if (!inTauri()) return null;
+  return invoke<PostIt>("create_scratch_postit");
+}
+
 export async function postitOpenForNote(noteId: string): Promise<PostIt | null> {
   if (!inTauri()) return null;
   return invoke<PostIt>("postit_open_for_note", { noteId });
 }
 
+/** Ferme et supprime le post-it. */
 export async function postitClose(id: string): Promise<void> {
   if (!inTauri()) return;
   await invoke("postit_close", { id });

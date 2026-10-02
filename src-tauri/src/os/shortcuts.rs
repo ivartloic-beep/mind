@@ -1,4 +1,4 @@
-//! Global shortcuts — étape 11.
+//! Global shortcuts — étape 11 + CTRL+ALT+P post-it.
 //!
 //! Hook config : [`load_bindings`] / [`ShortcutBindings`] — prefs fichier plus tard.
 
@@ -14,6 +14,8 @@ pub struct ShortcutBindings {
     pub capture: &'static str,
     /// Ouvre / ferme le panneau.
     pub toggle_panel: &'static str,
+    /// Crée un post-it scratch.
+    pub scratch_postit: &'static str,
 }
 
 impl Default for ShortcutBindings {
@@ -21,6 +23,7 @@ impl Default for ShortcutBindings {
         Self {
             capture: "Ctrl+Alt+N",
             toggle_panel: "Ctrl+Alt+Space",
+            scratch_postit: "Ctrl+Alt+P",
         }
     }
 }
@@ -55,13 +58,13 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
 
     let capture = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN);
     let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space);
+    let postit = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyP);
 
-    // Vérifie que les bindings déclarés correspondent aux Shortcut enregistrés
-    // (garde le hook config aligné avec le register).
     let _ = bindings;
 
     let capture_sc = capture;
     let toggle_sc = toggle;
+    let postit_sc = postit;
 
     app.plugin(
         tauri_plugin_global_shortcut::Builder::new()
@@ -75,6 +78,10 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
                     }
                 } else if shortcut == &toggle_sc {
                     toggle_panel(app);
+                } else if shortcut == &postit_sc {
+                    if let Err(err) = crate::windows::postit::create_scratch_postit(app.clone()) {
+                        eprintln!("shortcut postit: {err}");
+                    }
                 }
             })
             .build(),
@@ -89,11 +96,14 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
     if let Err(err) = app.global_shortcut().register(toggle) {
         failures.push(format!("{} ({})", bindings.toggle_panel, err));
     }
+    if let Err(err) = app.global_shortcut().register(postit) {
+        failures.push(format!("{} ({})", bindings.scratch_postit, err));
+    }
 
     if failures.is_empty() {
         eprintln!(
-            "shortcuts ok: {} → capture, {} → panneau",
-            bindings.capture, bindings.toggle_panel
+            "shortcuts ok: {} → capture, {} → panneau, {} → post-it",
+            bindings.capture, bindings.toggle_panel, bindings.scratch_postit
         );
         Ok(())
     } else {

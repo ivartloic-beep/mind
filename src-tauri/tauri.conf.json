@@ -38,13 +38,25 @@
         "title": "Ma Tête — Capture",
         "url": "capture.html",
         "width": 440,
-        "height": 168,
+        "height": 200,
         "visible": false,
         "resizable": false,
         "decorations": false,
         "skipTaskbar": true,
         "alwaysOnTop": true,
         "focus": false,
+        "center": true
+      },
+      {
+        "label": "library",
+        "title": "MIND — Bibliothèque",
+        "url": "library.html",
+        "width": 920,
+        "height": 700,
+        "visible": false,
+        "resizable": true,
+        "decorations": true,
+        "skipTaskbar": false,
         "center": true
       }
     ],
