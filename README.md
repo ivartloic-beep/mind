@@ -19,7 +19,7 @@ Nom provisoire : **Ma Tête**.
 - **Étape 10** : rappels tâche (🔔, notif Windows, snooze +10 min / +1 h / demain)
 - **Étape 11** : raccourcis globaux CTRL+ALT+N (capture) / CTRL+ALT+Espace (panneau)
 - **Étape 12** : tray + menu, autostart ON, single-instance, boot sans flash
-- **UX** : capture fermable (✕/Échap) · post-its autonomes (CTRL+ALT+P, croix=supprimer) · panneau compact + Bibliothèque · minuteur durée libre (+5 min)
+- **UX** : capture fermable (✕/Échap) · post-its autonomes (CTRL+ALT+P, croix=supprimer, CTRL+ALT+H masquer/réafficher) · panneau compact + Bibliothèque (réouvrable) · minuteur durée libre (+5 min)
 
 V1 desktop + polish UX. Test réel Windows recommandé via installateur **NSIS**.
 

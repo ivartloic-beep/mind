@@ -71,6 +71,9 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            windows::handle_window_event(window, event);
+        })
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::list_projects,

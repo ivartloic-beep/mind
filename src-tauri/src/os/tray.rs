@@ -84,6 +84,7 @@ pub fn init_tray(app: &AppHandle) -> Result<(), String> {
                 let _ = app.emit("panel-focus-settings", ());
             }
             "quit" => {
+                postit::mark_app_exiting();
                 app.exit(0);
             }
             other => eprintln!("tray menu unhandled: {other}"),
@@ -114,6 +115,8 @@ pub fn handle_run_event(_app: &AppHandle, event: &RunEvent) {
     if let RunEvent::ExitRequested { api, code, .. } = event {
         if code.is_none() {
             api.prevent_exit();
+        } else {
+            postit::mark_app_exiting();
         }
     }
 }

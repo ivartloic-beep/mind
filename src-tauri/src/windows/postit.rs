@@ -1,8 +1,10 @@
 //! Fenêtres post-it natives `postit-{id}` — pensées immédiates autonomes.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder,
+    WebviewWindowBuilder, Window,
 };
 
 use crate::domain::{new_id, DataChangedPayload, PostIt, PostItFilter};
@@ -13,6 +15,17 @@ pub const LABEL_PREFIX: &str = "postit-";
 const DEFAULT_W: f64 = 280.0;
 const DEFAULT_H: f64 = 240.0;
 const MAX_OPEN: usize = 20;
+
+/// Évite de supprimer les post-its quand l’app quitte (Destroy/Close de toutes les fenêtres).
+static APP_EXITING: AtomicBool = AtomicBool::new(false);
+
+pub fn mark_app_exiting() {
+    APP_EXITING.store(true, Ordering::SeqCst);
+}
+
+fn id_from_label(label: &str) -> Option<&str> {
+    label.strip_prefix(LABEL_PREFIX)
+}
 
 fn label_for(id: &str) -> String {
     format!("{LABEL_PREFIX}{id}")
@@ -186,30 +199,37 @@ pub fn open_for_note_id(app: &AppHandle, note_id: &str) -> Result<PostIt, String
     Ok(postit)
 }
 
-/// Croix / fermeture : détruit la fenêtre et **supprime** le post-it.
-#[tauri::command]
-pub fn postit_close(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
-    let postit = state
-        .storage
-        .get_postit(&id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("postit introuvable: {id}"))?;
-
-    if let Some(window) = app.get_webview_window(&label_for(&id)) {
-        let _ = window.hide();
-        let _ = window.destroy();
+/// Croix utilisateur : supprimer l’entité (la fenêtre se ferme nativement).
+pub fn on_user_close_requested(window: &Window) {
+    if APP_EXITING.load(Ordering::SeqCst) {
+        return;
     }
+    let Some(id) = id_from_label(window.label()) else {
+        return;
+    };
+    if let Err(err) = delete_postit_entity(&window.app_handle(), id) {
+        eprintln!("postit close cleanup {id}: {err}");
+    }
+}
+
+/// Supprime le post-it en base + note orpheline legacy. N’ouvre / ne détruit aucune fenêtre.
+fn delete_postit_entity(app: &AppHandle, id: &str) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let postit = match state.storage.get_postit(id).map_err(|e| e.to_string())? {
+        Some(p) => p,
+        None => return Ok(()),
+    };
 
     let legacy_note = postit.note_id.clone();
     state
         .storage
-        .delete_postit(&id)
+        .delete_postit(id)
         .map_err(|e| e.to_string())?;
     let _ = app.emit(
         "data-changed",
         DataChangedPayload {
             entity: "postit".into(),
-            id: id.clone(),
+            id: id.to_string(),
         },
     );
 
@@ -238,6 +258,39 @@ pub fn postit_close(app: AppHandle, state: State<'_, AppState>, id: String) -> R
         }
     }
     Ok(())
+}
+
+/// Fermeture programmatique : `close()` natif (cleanup via CloseRequested).
+#[tauri::command]
+pub fn postit_close(app: AppHandle, id: String) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(&label_for(&id)) {
+        window.close().map_err(|e| e.to_string())?;
+    } else {
+        delete_postit_entity(&app, &id)?;
+    }
+    Ok(())
+}
+
+/// CTRL+ALT+H — masque tous les post-its visibles, ou les réaffiche tous.
+pub fn toggle_postits_visibility(app: &AppHandle) {
+    let postits: Vec<_> = app
+        .webview_windows()
+        .into_iter()
+        .filter(|(label, _)| label.starts_with(LABEL_PREFIX))
+        .map(|(_, w)| w)
+        .collect();
+    if postits.is_empty() {
+        return;
+    }
+    let any_visible = postits.iter().any(|w| w.is_visible().unwrap_or(false));
+    for window in postits {
+        if any_visible {
+            let _ = window.hide();
+        } else {
+            let _ = window.unminimize();
+            let _ = window.show();
+        }
+    }
 }
 
 #[tauri::command]

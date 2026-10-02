@@ -5,11 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getPostit, upsertPostit } from "../../services/api";
-import {
-  postitClose,
-  postitSetAlwaysOnTop,
-  postitUpdateGeometry,
-} from "../../services/postit";
+import { postitSetAlwaysOnTop, postitUpdateGeometry } from "../../services/postit";
 import type { PostIt } from "../../types/models";
 import "./postit.css";
 
@@ -29,7 +25,6 @@ export function PostItApp() {
   const geoTimer = useRef<number | null>(null);
   const postitRef = useRef<PostIt | null>(null);
   postitRef.current = postit;
-  const closingRef = useRef(false);
 
   useEffect(() => {
     if (!postitId) {
@@ -91,24 +86,10 @@ export function PostItApp() {
           }, 280);
         };
 
+        // Fermeture native : pas de preventDefault / destroy IPC (évite le deadlock CloseRequested).
+        // La suppression DB est gérée côté Rust (on_window_event).
         unsubs.push(await win.onMoved(persistGeo));
         unsubs.push(await win.onResized(persistGeo));
-        unsubs.push(
-          await win.onCloseRequested(async (event) => {
-            event.preventDefault();
-            if (closingRef.current) return;
-            closingRef.current = true;
-            try {
-              await postitClose(postitId!);
-            } catch {
-              try {
-                await win.destroy();
-              } catch {
-                /* ignore */
-              }
-            }
-          }),
-        );
       } catch {
         /* hors Tauri */
       }
