@@ -2,7 +2,7 @@
  * Panneau compact — actions + 5 dernières tâches / notes + minuteur.
  */
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   autostartIsEnabled,
   autostartSetEnabled,
@@ -87,8 +87,9 @@ export function PanelApp() {
   const [syncToken, setSyncToken] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cloudEdit, setCloudEdit] = useState(false);
   const [, startTransition] = useTransition();
-  const settingsRef = useRef<HTMLElement | null>(null);
 
   const refresh = useCallback(async () => {
     const [taskRows, noteRows] = await Promise.all([
@@ -182,12 +183,7 @@ export function PanelApp() {
     void listenPanelFocusSettings(() => {
       setOpen(true);
       storeSetOpen(true);
-      window.setTimeout(() => {
-        settingsRef.current?.scrollIntoView({
-          block: "nearest",
-          behavior: "smooth",
-        });
-      }, 80);
+      setSettingsOpen(true);
     }).then((fn) => unlistens.push(fn));
 
     return () => {
@@ -381,205 +377,260 @@ export function PanelApp() {
       </button>
 
       <div className="panel-body">
-        <header className="panel-header">
-          <h1>MIND</h1>
-          <p>Capturer d&apos;abord, organiser ensuite.</p>
-        </header>
+        {settingsOpen ? (
+          <section
+            className="panel-settings-view"
+            id="panel-settings"
+            aria-label="Paramètres"
+          >
+            <header className="panel-settings-head">
+              <button
+                type="button"
+                className="panel-settings-back"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setCloudEdit(false);
+                  setSyncMsg(null);
+                }}
+              >
+                ← Retour
+              </button>
+              <h2>Paramètres</h2>
+            </header>
 
-        {dueReminder && (
-          <ReminderDueBanner
-            due={dueReminder}
-            busy={reminderBusy}
-            onOpen={() => void handleOpenDue()}
-            onSnooze={(kind) => void handleSnoozeDue(kind)}
-            onDismiss={() => void handleDismissDue()}
-          />
+            <div className="panel-settings-group">
+              <label className="panel-toggle">
+                <input
+                  type="checkbox"
+                  checked={alwaysOnTop}
+                  onChange={() => void toggleAlwaysOnTop()}
+                />
+                <span>Toujours au-dessus</span>
+              </label>
+              <label className="panel-toggle">
+                <input
+                  type="checkbox"
+                  checked={autostart}
+                  disabled={autostartBusy}
+                  onChange={() => void toggleAutostart()}
+                />
+                <span>Démarrer avec Windows</span>
+              </label>
+            </div>
+
+            <div className="panel-settings-group">
+              <div className="panel-settings-group-head">
+                <h3>Cloud</h3>
+                {syncCfg?.enabled && syncCfg.hasToken && (
+                  <span className="panel-settings-badge">actif</span>
+                )}
+              </div>
+              <label className="panel-toggle">
+                <input
+                  type="checkbox"
+                  checked={syncCfg?.enabled ?? false}
+                  disabled={syncBusy || !syncCfg || !syncToken.trim()}
+                  onChange={() =>
+                    void saveSync({ enabled: !(syncCfg?.enabled ?? false) })
+                  }
+                />
+                <span>Synchronisation</span>
+              </label>
+              <div className="panel-actions">
+                <button
+                  type="button"
+                  className="panel-action-btn is-primary"
+                  disabled={syncBusy || !syncToken.trim()}
+                  onClick={() => void handleSyncNow()}
+                >
+                  Synchroniser
+                </button>
+                <button
+                  type="button"
+                  className="panel-link-btn"
+                  onClick={() => setCloudEdit((v) => !v)}
+                >
+                  {cloudEdit ? "Masquer" : "Configurer"}
+                </button>
+              </div>
+              {cloudEdit && (
+                <div className="panel-settings-cloud">
+                  <label className="panel-field">
+                    <span>Token API</span>
+                    <input
+                      type="password"
+                      className="panel-input"
+                      value={syncToken}
+                      disabled={syncBusy}
+                      placeholder="Bearer token"
+                      autoComplete="off"
+                      onChange={(e) => setSyncToken(e.target.value)}
+                      onBlur={() => void saveSync()}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="panel-action-btn"
+                    disabled={syncBusy || !syncToken.trim()}
+                    onClick={() => void handleSyncTest()}
+                  >
+                    Tester la connexion
+                  </button>
+                </div>
+              )}
+              {syncMsg && <p className="panel-muted">{syncMsg}</p>}
+              {syncCfg?.lastSyncAt && !cloudEdit && (
+                <p className="panel-muted">
+                  Dernière sync :{" "}
+                  {new Date(syncCfg.lastSyncAt).toLocaleString()}
+                </p>
+              )}
+              {syncCfg?.lastError && (
+                <p className="panel-error">{syncCfg.lastError}</p>
+              )}
+            </div>
+          </section>
+        ) : (
+          <>
+            <header className="panel-header">
+              <div className="panel-header-row">
+                <h1>MIND</h1>
+                <button
+                  type="button"
+                  className="panel-settings-btn"
+                  aria-label="Paramètres"
+                  title="Paramètres"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  ⚙
+                </button>
+              </div>
+              <p>Capturer d&apos;abord, organiser ensuite.</p>
+            </header>
+
+            {dueReminder && (
+              <ReminderDueBanner
+                due={dueReminder}
+                busy={reminderBusy}
+                onOpen={() => void handleOpenDue()}
+                onSnooze={(kind) => void handleSnoozeDue(kind)}
+                onDismiss={() => void handleDismissDue()}
+              />
+            )}
+
+            <section className="panel-section">
+              <h2>Actions</h2>
+              <div className="panel-actions">
+                <button
+                  type="button"
+                  className="panel-action-btn is-primary"
+                  onClick={() => void captureShow()}
+                >
+                  Capturer
+                </button>
+                <button
+                  type="button"
+                  className="panel-action-btn"
+                  onClick={() => void createScratchPostit()}
+                >
+                  Post-it
+                </button>
+                <button
+                  type="button"
+                  className="panel-action-btn"
+                  onClick={() => void libraryShow()}
+                >
+                  Bibliothèque
+                </button>
+              </div>
+            </section>
+
+            <section className="panel-section panel-section-grow">
+              <div className="panel-section-head">
+                <h2>Récent</h2>
+                <button
+                  type="button"
+                  className="panel-link-btn"
+                  onClick={() => void libraryShow()}
+                >
+                  Voir tout
+                </button>
+              </div>
+
+              {loadState === "loading" && (
+                <p className="panel-muted">Chargement…</p>
+              )}
+              {loadState === "error" && (
+                <p className="panel-error">{loadError ?? "Erreur"}</p>
+              )}
+              {loadState === "ready" && (
+                <>
+                  <p className="panel-subhead">Tâches</p>
+                  {tasks.length === 0 ? (
+                    <p className="panel-muted">Aucune tâche active.</p>
+                  ) : (
+                    <ul className="panel-recent-list">
+                      {tasks.map((task) => (
+                        <li
+                          key={task.id}
+                          className="panel-recent-item"
+                          data-task-id={task.id}
+                        >
+                          <button
+                            type="button"
+                            className="panel-recent-check"
+                            disabled={pendingId === task.id}
+                            aria-label="Terminer"
+                            onClick={() => void toggleTaskDone(task)}
+                          >
+                            ○
+                          </button>
+                          <span className="panel-recent-title">{task.title}</span>
+                          <button
+                            type="button"
+                            className={`panel-recent-bell ${task.reminder ? "has-reminder" : ""}`}
+                            disabled={pendingId === task.id}
+                            title={
+                              task.reminder
+                                ? "Retirer le rappel"
+                                : "Rappel +10 min"
+                            }
+                            onClick={() => void quickRemind(task)}
+                          >
+                            🔔
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <p className="panel-subhead">Notes</p>
+                  {notes.length === 0 ? (
+                    <p className="panel-muted">Aucune note.</p>
+                  ) : (
+                    <ul className="panel-recent-list">
+                      {notes.map((note) => (
+                        <li key={note.id} className="panel-recent-item">
+                          <span className="panel-recent-kind">
+                            {note.kind === "idea" ? "idée" : "note"}
+                          </span>
+                          <span className="panel-recent-title">
+                            {note.title?.trim() || preview(note.body)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </section>
+
+            <section className="panel-section">
+              <h2>Minuteur</h2>
+              <TimerPanel />
+            </section>
+          </>
         )}
-
-        <section className="panel-section">
-          <h2>Actions</h2>
-          <div className="panel-actions">
-            <button
-              type="button"
-              className="panel-action-btn is-primary"
-              onClick={() => void captureShow()}
-            >
-              Capturer
-            </button>
-            <button
-              type="button"
-              className="panel-action-btn"
-              onClick={() => void createScratchPostit()}
-            >
-              Post-it
-            </button>
-            <button
-              type="button"
-              className="panel-action-btn"
-              onClick={() => void libraryShow()}
-            >
-              Bibliothèque
-            </button>
-          </div>
-        </section>
-
-        <section className="panel-section panel-section-grow">
-          <div className="panel-section-head">
-            <h2>Récent</h2>
-            <button
-              type="button"
-              className="panel-link-btn"
-              onClick={() => void libraryShow()}
-            >
-              Voir tout
-            </button>
-          </div>
-
-          {loadState === "loading" && (
-            <p className="panel-muted">Chargement…</p>
-          )}
-          {loadState === "error" && (
-            <p className="panel-error">{loadError ?? "Erreur"}</p>
-          )}
-          {loadState === "ready" && (
-            <>
-              <p className="panel-subhead">Tâches</p>
-              {tasks.length === 0 ? (
-                <p className="panel-muted">Aucune tâche active.</p>
-              ) : (
-                <ul className="panel-recent-list">
-                  {tasks.map((task) => (
-                    <li
-                      key={task.id}
-                      className="panel-recent-item"
-                      data-task-id={task.id}
-                    >
-                      <button
-                        type="button"
-                        className="panel-recent-check"
-                        disabled={pendingId === task.id}
-                        aria-label="Terminer"
-                        onClick={() => void toggleTaskDone(task)}
-                      >
-                        ○
-                      </button>
-                      <span className="panel-recent-title">{task.title}</span>
-                      <button
-                        type="button"
-                        className={`panel-recent-bell ${task.reminder ? "has-reminder" : ""}`}
-                        disabled={pendingId === task.id}
-                        title={task.reminder ? "Retirer le rappel" : "Rappel +10 min"}
-                        onClick={() => void quickRemind(task)}
-                      >
-                        🔔
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <p className="panel-subhead">Notes</p>
-              {notes.length === 0 ? (
-                <p className="panel-muted">Aucune note.</p>
-              ) : (
-                <ul className="panel-recent-list">
-                  {notes.map((note) => (
-                    <li key={note.id} className="panel-recent-item">
-                      <span className="panel-recent-kind">
-                        {note.kind === "idea" ? "idée" : "note"}
-                      </span>
-                      <span className="panel-recent-title">
-                        {note.title?.trim() || preview(note.body)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-        </section>
-
-        <section className="panel-section">
-          <h2>Minuteur</h2>
-          <TimerPanel />
-        </section>
-
-        <section
-          className="panel-section panel-settings"
-          ref={settingsRef}
-          id="panel-settings"
-        >
-          <h2>Réglages</h2>
-          <label className="panel-toggle">
-            <input
-              type="checkbox"
-              checked={alwaysOnTop}
-              onChange={() => void toggleAlwaysOnTop()}
-            />
-            <span>Toujours au-dessus</span>
-          </label>
-          <label className="panel-toggle">
-            <input
-              type="checkbox"
-              checked={autostart}
-              disabled={autostartBusy}
-              onChange={() => void toggleAutostart()}
-            />
-            <span>Démarrer avec Windows</span>
-          </label>
-
-          <h3 className="panel-subhead">Cloud (mind.louetline.fr)</h3>
-          <label className="panel-toggle">
-            <input
-              type="checkbox"
-              checked={syncCfg?.enabled ?? false}
-              disabled={syncBusy || !syncCfg}
-              onChange={() =>
-                void saveSync({ enabled: !(syncCfg?.enabled ?? false) })
-              }
-            />
-            <span>Sync activée</span>
-          </label>
-          <label className="panel-field">
-            <span>Token API</span>
-            <input
-              type="password"
-              className="panel-input"
-              value={syncToken}
-              disabled={syncBusy}
-              placeholder="Bearer token"
-              onChange={(e) => setSyncToken(e.target.value)}
-              onBlur={() => void saveSync()}
-            />
-          </label>
-          <div className="panel-actions">
-            <button
-              type="button"
-              className="panel-action-btn"
-              disabled={syncBusy || !syncToken.trim()}
-              onClick={() => void handleSyncTest()}
-            >
-              Tester
-            </button>
-            <button
-              type="button"
-              className="panel-action-btn is-primary"
-              disabled={syncBusy || !syncToken.trim()}
-              onClick={() => void handleSyncNow()}
-            >
-              Synchroniser
-            </button>
-          </div>
-          {syncMsg && <p className="panel-muted">{syncMsg}</p>}
-          {syncCfg?.lastSyncAt && (
-            <p className="panel-muted">
-              Dernière sync : {new Date(syncCfg.lastSyncAt).toLocaleString()}
-            </p>
-          )}
-          {syncCfg?.lastError && (
-            <p className="panel-error">{syncCfg.lastError}</p>
-          )}
-        </section>
       </div>
     </div>
   );
