@@ -28,6 +28,7 @@
 - Import one-shot : bouton « Importer tâches locales ».
 - Fiche tâche riche (docs / activités / assignation) via UI Gestion.
 - Capture tâche : mêmes champs Gestion (description, priorité, échéance, statut, notes, projet → category).
+- Panneau : **file du jour** (≤4 tâches scorées échéance/priorité/statut) + **déposer fichier** → bureau ou projet Gestion (`workspace_upload.php`).
 - Projets MIND ↔ `projects.php` + `work_projects.php` (liste / création / rename / delete + sync au login).
 - Notes / idées MIND ↔ bureau Gestion (`workspace.php`, types `page` / `idea`, visibility `personal`).
 
