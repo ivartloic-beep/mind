@@ -36,9 +36,9 @@
   transform: translateY(-1px);
 }
 
-/* Fermé : plus de barre verticale — pastille flèche coin haut droit. */
+/* Fermé : PNG flèche transparente (pas de fond carré). */
 .panel-root.is-closed {
-  background: transparent;
+  background: transparent !important;
   border: 0;
   align-items: stretch;
   justify-content: stretch;
@@ -48,20 +48,26 @@
   flex: 1 1 auto;
   width: 100%;
   height: 100%;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--bg) 92%, white);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
-  color: var(--fg);
+  border: 0;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none;
+  color: inherit;
+  padding: 0;
 }
 
 .panel-root.is-closed .panel-handle:hover {
-  background: var(--bg);
-  color: var(--accent);
+  background: transparent !important;
+  filter: brightness(1.06);
 }
 
-.panel-root.is-closed .panel-handle-arrow {
-  font-size: 1.1rem;
+.panel-open-tab-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
 }
 
 .panel-body {
@@ -860,10 +866,15 @@
   outline-offset: 1px;
 }
 
+/* Fond fenêtre transparent (sinon carré sous l'onglet fermé). */
+:root {
+  background: transparent !important;
+}
+
 html,
 body,
 #root {
   height: 100%;
   overflow: hidden;
-  background: transparent;
+  background: transparent !important;
 }

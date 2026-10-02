@@ -371,9 +371,21 @@ export function PanelApp() {
         aria-label={open ? "Fermer le panneau" : "Ouvrir le panneau"}
         title={open ? "Fermer" : "Ouvrir"}
       >
-        <span className="panel-handle-arrow" aria-hidden="true">
-          {open ? "›" : "‹"}
-        </span>
+        {open ? (
+          <span className="panel-handle-arrow" aria-hidden="true">
+            ›
+          </span>
+        ) : (
+          <img
+            className="panel-open-tab-img"
+            src={new URL("../../assets/panel-open-tab.png", import.meta.url).href}
+            srcSet={`${new URL("../../assets/panel-open-tab.png", import.meta.url).href} 1x, ${new URL("../../assets/panel-open-tab@2x.png", import.meta.url).href} 2x`}
+            alt=""
+            width={40}
+            height={40}
+            draggable={false}
+          />
+        )}
       </button>
 
       <div className="panel-body">

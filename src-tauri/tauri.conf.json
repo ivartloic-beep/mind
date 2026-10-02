@@ -31,7 +31,10 @@
         "decorations": false,
         "skipTaskbar": true,
         "alwaysOnTop": false,
-        "transparent": true
+        "transparent": true,
+        "shadow": false,
+        "noRedirectionBitmap": true,
+        "backgroundColor": [0, 0, 0, 0]
       },
       {
         "label": "capture",
