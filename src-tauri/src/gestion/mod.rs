@@ -131,25 +131,16 @@ pub async fn list_tasks_hybrid(
                 merged.push(task);
             }
 
-            // Panneau → Gestion : pousser les tâches locales absentes de personal_tasks.
+            // Gestion → panneau : si absent de personal_tasks, retirer du cache
+            // (évite de ressusciter une tâche supprimée dans Gestion).
+            // Panneau → Gestion reste assuré par create/upsert/delete.
             let locals = state
                 .storage
                 .list_tasks(&TaskFilter::default())
                 .map_err(|e| e.to_string())?;
             for local in locals {
-                if remote_ids.contains(&local.id) {
-                    continue;
-                }
-                match client.create_task(&local).await {
-                    Ok(()) => {
-                        let _ = client.update_task(&local).await;
-                        remote_ids.insert(local.id.clone());
-                        merged.push(local);
-                    }
-                    Err(_) => {
-                        // Garder en cache local si l’API refuse.
-                        merged.push(local);
-                    }
+                if !remote_ids.contains(&local.id) {
+                    let _ = state.storage.delete_task(&local.id);
                 }
             }
 
@@ -450,26 +441,19 @@ pub async fn list_notes_hybrid(
                     .map_err(|e| e.to_string())?;
             }
 
-            // Panneau → Gestion : pousser les notes locales absentes du bureau.
+            // Gestion → panneau : source de vérité = bureau distant.
+            // Une note créée dans MIND (UUID) puis supprimée dans Gestion
+            // ne doit PAS être re-poussée ni rester affichée.
             let locals = state
                 .storage
                 .list_notes(&NoteFilter::default())
                 .map_err(|e| e.to_string())?;
-            for local in &locals {
-                if remote_ids.contains(&local.id) {
-                    continue;
-                }
-                // Notes déjà issues du bureau puis supprimées côté Gestion.
-                if local.id.starts_with("ws_") {
+            for local in locals {
+                if !remote_ids.contains(&local.id) {
                     let _ = state.storage.delete_note(&local.id);
-                    continue;
-                }
-                if let Ok(()) = client.save_workspace_element(local).await {
-                    remote_ids.insert(local.id.clone());
                 }
             }
 
-            // Liste finale depuis le cache (les deux sens).
             state
                 .storage
                 .list_notes(&filter)
