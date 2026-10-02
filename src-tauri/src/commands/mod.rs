@@ -136,17 +136,15 @@ pub async fn set_task_done(
     Ok(task)
 }
 
-// --- Notes ---
+// --- Notes (SQLite local, ou workspace bureau si session Gestion) ---
 
 #[tauri::command]
-pub fn list_notes(
+pub async fn list_notes(
+    app: AppHandle,
     state: State<'_, AppState>,
     filter: Option<NoteFilter>,
 ) -> Result<Vec<Note>, String> {
-    state
-        .storage
-        .list_notes(&filter.unwrap_or_default())
-        .map_err(map_err)
+    gestion::list_notes_hybrid(&app, &state, filter.unwrap_or_default()).await
 }
 
 #[tauri::command]
@@ -155,35 +153,33 @@ pub fn get_note(state: State<'_, AppState>, id: String) -> Result<Option<Note>, 
 }
 
 #[tauri::command]
-pub fn upsert_note(
+pub async fn upsert_note(
     app: AppHandle,
     state: State<'_, AppState>,
-    mut note: Note,
+    note: Note,
 ) -> Result<Note, String> {
-    let now = now_iso();
-    if note.id.is_empty() {
-        note.id = new_id();
-    }
-    if note.created_at.is_empty() {
-        note.created_at = now.clone();
-    }
-    note.updated_at = now;
-    state.storage.upsert_note(&note).map_err(map_err)?;
+    let note = gestion::upsert_note_hybrid(&app, &state, note).await?;
     emit_changed(&app, "note", &note.id)?;
     Ok(note)
 }
 
 #[tauri::command]
-pub fn delete_note(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
-    state.storage.delete_note(&id).map_err(map_err)?;
-    sync::schedule_remote_delete(&app, "notes", id.clone());
+pub async fn delete_note(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    gestion::delete_note_hybrid(&app, &state, &id).await?;
+    if !gestion::tasks_backend_active(&app) {
+        sync::schedule_remote_delete(&app, "notes", id.clone());
+    }
     emit_changed(&app, "note", &id)?;
     Ok(())
 }
 
-/// Capture rapide / panneau → création directe d'une Note (kind note|idea).
+/// Capture rapide / panneau → Note / Idée (bureau Gestion si connecté).
 #[tauri::command]
-pub fn create_note(
+pub async fn create_note(
     app: AppHandle,
     state: State<'_, AppState>,
     body: String,
@@ -191,20 +187,8 @@ pub fn create_note(
     project_id: Option<String>,
     title: Option<String>,
 ) -> Result<Note, String> {
-    let now = now_iso();
-    let title = title
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty());
-    let note = Note {
-        id: new_id(),
-        title,
-        body,
-        kind,
-        project_id,
-        created_at: now.clone(),
-        updated_at: now,
-    };
-    state.storage.upsert_note(&note).map_err(map_err)?;
+    let note =
+        gestion::create_note_hybrid(&app, &state, body, kind, project_id, title).await?;
     emit_changed(&app, "note", &note.id)?;
     Ok(note)
 }

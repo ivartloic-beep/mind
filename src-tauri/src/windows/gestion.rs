@@ -268,7 +268,7 @@ pub async fn gestion_login(
     if let Some(window) = app.get_webview_window(GESTION_LABEL) {
         inject_session_bridge(&window, &prefs);
     }
-    // Tire work_projects dans le cache local (panneau / capture).
+    // Tire projets + notes bureau dans le cache local (panneau / capture).
     let state = app.state::<crate::state::AppState>();
     if let Ok(n) = crate::gestion::sync_projects_after_login(&app, &state).await {
         let _ = app.emit(
@@ -276,6 +276,13 @@ pub async fn gestion_login(
             crate::domain::DataChangedPayload {
                 entity: "project".into(),
                 id: format!("sync:{n}"),
+            },
+        );
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "note".into(),
+                id: "sync:bureau".into(),
             },
         );
     }

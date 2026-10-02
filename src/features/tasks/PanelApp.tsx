@@ -566,8 +566,8 @@ export function PanelApp() {
                 <h3>Gestion (app complète)</h3>
               </div>
               <p className="panel-muted">
-                Session active : tâches → personal_tasks, projets → work_projects.
-                La capture utilise les mêmes champs que Gestion.
+                Session active : tâches → personal_tasks, projets → Gestion,
+                notes/idées → bureau (workspace). Capture alignée sur Gestion.
               </p>
               <label className="panel-field">
                 <span>API Gestion</span>
@@ -621,8 +621,8 @@ export function PanelApp() {
               {gestionLoggedIn ? (
                 <>
                   <p className="panel-muted">
-                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Tâches et
-                    projets synchronisés avec Gestion.
+                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Tâches,
+                    projets et notes (bureau) synchronisés avec Gestion.
                   </p>
                   <div className="panel-actions">
                     <button

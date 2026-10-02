@@ -6,7 +6,7 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::domain::{now_iso, Project, Task, TaskPriority, TaskStatus};
+use crate::domain::{now_iso, Note, NoteKind, Project, Task, TaskPriority, TaskStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +62,13 @@ struct ApiWorkProjectsResponse {
 struct ApiProjectsResponse {
     success: Option<bool>,
     projects: Option<Vec<Value>>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiWorkspaceResponse {
+    success: Option<bool>,
+    elements: Option<Vec<Value>>,
     error: Option<String>,
 }
 
@@ -194,6 +201,132 @@ pub fn upsert_work_project_value(data: &mut WorkProjectsData, project: &Project)
 pub fn remove_work_project_value(data: &mut WorkProjectsData, id: &str) {
     data.projects
         .retain(|e| json_id(e).as_deref() != Some(id));
+}
+
+fn plain_to_html(text: &str) -> String {
+    let escaped = text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!("<p>{}</p>", escaped.replace('\n', "<br>"))
+}
+
+fn html_to_plain(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.replace("&nbsp;", " ")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+        .trim()
+        .to_string()
+}
+
+fn parse_workspace_content(raw: &str, typ: &str) -> String {
+    if raw.trim().is_empty() {
+        return String::new();
+    }
+    if let Ok(v) = serde_json::from_str::<Value>(raw) {
+        if typ == "quicknote" {
+            if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+                return text.to_string();
+            }
+        }
+        if let Some(html) = v.get("html").and_then(|h| h.as_str()) {
+            return html_to_plain(html);
+        }
+        if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
+            return text.to_string();
+        }
+    }
+    html_to_plain(raw)
+}
+
+pub fn note_title_for_workspace(note: &Note) -> String {
+    if let Some(t) = note
+        .title
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        return t.to_string();
+    }
+    let first = note.body.lines().next().unwrap_or("").trim();
+    if first.is_empty() {
+        "Sans titre".into()
+    } else {
+        let count = first.chars().count();
+        if count > 80 {
+            format!("{}…", first.chars().take(77).collect::<String>())
+        } else {
+            first.to_string()
+        }
+    }
+}
+
+/// Élément workspace bureau → Note MIND (`page`/`quicknote`/`idea` perso).
+pub fn workspace_element_to_note(value: &Value) -> Option<Note> {
+    let typ = value.get("type").and_then(|t| t.as_str())?;
+    let kind = match typ {
+        "page" | "quicknote" => NoteKind::Note,
+        "idea" => NoteKind::Idea,
+        _ => return None,
+    };
+    let id = json_id(value)?;
+    let title = json_str_any(value, &["title"]).filter(|t| t != "Sans titre");
+    let content_raw = value
+        .get("content")
+        .and_then(|c| c.as_str())
+        .unwrap_or("");
+    let body = parse_workspace_content(content_raw, typ);
+    let created_at =
+        json_str_any(value, &["created_at", "createdAt"]).unwrap_or_else(now_iso);
+    let updated_at = json_str_any(value, &["updated_at", "updatedAt"])
+        .unwrap_or_else(|| created_at.clone());
+    Some(Note {
+        id,
+        title,
+        body,
+        kind,
+        project_id: None,
+        created_at,
+        updated_at,
+    })
+}
+
+pub fn note_to_workspace_payload(note: &Note, token: &str) -> Value {
+    let typ = match note.kind {
+        NoteKind::Note => "page",
+        NoteKind::Idea => "idea",
+    };
+    let content = serde_json::json!({
+        "html": plain_to_html(&note.body),
+        "attachments": [],
+    });
+    let mut payload = serde_json::json!({
+        "id": note.id,
+        "type": typ,
+        "title": note_title_for_workspace(note),
+        "content": content.to_string(),
+        "visibility": "personal",
+        "tags": "[]",
+        "folder_id": null,
+        "token": token,
+    });
+    if matches!(note.kind, NoteKind::Idea) {
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("status".into(), Value::String("draft".into()));
+        }
+    }
+    payload
 }
 
 /// Payload brut personal_tasks (API PHP).
@@ -622,6 +755,126 @@ impl GestionClient {
                 .and_then(|r| r.error)
                 .unwrap_or(text);
             return Err(format!("work_projects POST: {err}"));
+        }
+        Ok(())
+    }
+
+    /// Notes / idées du bureau (`workspace.php?visibility=personal`).
+    pub async fn list_workspace_personal(&self) -> Result<Vec<Value>, String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let endpoint = format!(
+            "workspace.php?visibility=personal&token={}",
+            urlencoding_lite(&raw)
+        );
+        let url = self.url(&endpoint);
+        let res = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let body = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("workspace GET HTTP {status}: {body}"));
+        }
+        let parsed: ApiWorkspaceResponse = serde_json::from_str(&body).map_err(|e| {
+            format!(
+                "workspace JSON: {e} — {}",
+                body.chars().take(200).collect::<String>()
+            )
+        })?;
+        if let Some(err) = parsed.error {
+            return Err(err);
+        }
+        Ok(parsed.elements.unwrap_or_default())
+    }
+
+    pub async fn save_workspace_element(&self, note: &Note) -> Result<(), String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("workspace.php");
+        let payload = note_to_workspace_payload(note, &raw);
+
+        // PUT d’abord (update), sinon POST (création) — même schéma que personal_tasks.
+        let put_res = self
+            .http
+            .put(&url)
+            .header(AUTHORIZATION, &bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let put_status = put_res.status();
+        let put_text = put_res.text().await.map_err(|e| e.to_string())?;
+        if put_status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if put_status.is_success() {
+            return Ok(());
+        }
+
+        let post_res = self
+            .http
+            .post(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let post_status = post_res.status();
+        let post_text = post_res.text().await.map_err(|e| e.to_string())?;
+        if post_status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !post_status.is_success() {
+            let err = serde_json::from_str::<ApiOkResponse>(&post_text)
+                .ok()
+                .and_then(|r| r.error)
+                .or_else(|| {
+                    serde_json::from_str::<ApiOkResponse>(&put_text)
+                        .ok()
+                        .and_then(|r| r.error)
+                })
+                .unwrap_or_else(|| format!("PUT {put_status}: {put_text} / POST {post_status}: {post_text}"));
+            return Err(format!("workspace save: {err}"));
+        }
+        Ok(())
+    }
+
+    pub async fn delete_workspace_element(&self, id: &str) -> Result<(), String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("workspace.php");
+        let body = serde_json::json!({ "id": id, "token": raw });
+        let res = self
+            .http
+            .delete(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            let err = serde_json::from_str::<ApiOkResponse>(&text)
+                .ok()
+                .and_then(|r| r.error)
+                .unwrap_or(text);
+            return Err(format!("workspace DELETE: {err}"));
         }
         Ok(())
     }

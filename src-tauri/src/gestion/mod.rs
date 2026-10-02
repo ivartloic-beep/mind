@@ -1,4 +1,4 @@
-//! Client API gestion-v2 (`personal_tasks` + login) — source de vérité tâches.
+//! Client API gestion-v2 — tâches (personal_tasks), projets, notes bureau (workspace).
 
 mod client;
 
@@ -6,14 +6,17 @@ pub use client::{GestionClient, MigrateReport};
 
 use tauri::AppHandle;
 
-use crate::domain::{now_iso, CreateTaskInput, Project, Task, TaskFilter, TaskPriority, TaskStatus};
+use crate::domain::{
+    now_iso, CreateTaskInput, Note, NoteFilter, NoteKind, Project, Task, TaskFilter, TaskPriority,
+    TaskStatus,
+};
 use crate::state::AppState;
 use crate::storage::Storage;
 use crate::windows::gestion::{load_prefs, save_prefs, GestionPrefs};
 
 use self::client::{
     production_projects_to_mind, remove_work_project_value, upsert_work_project_value,
-    work_project_to_mind,
+    work_project_to_mind, workspace_element_to_note,
 };
 
 pub fn try_client(app: &AppHandle) -> Option<GestionClient> {
@@ -387,6 +390,145 @@ pub async fn delete_project_hybrid(
     Ok(())
 }
 
+// --- Notes / idées → bureau Gestion (workspace.php visibility=personal) ---
+
+fn note_matches_filter(note: &Note, filter: &NoteFilter) -> bool {
+    if let Some(true) = filter.no_project {
+        if note.project_id.is_some() {
+            return false;
+        }
+    } else if let Some(ref pid) = filter.project_id {
+        if note.project_id.as_deref() != Some(pid.as_str()) {
+            return false;
+        }
+    }
+    if let Some(kind) = filter.kind {
+        if note.kind != kind {
+            return false;
+        }
+    }
+    true
+}
+
+pub async fn list_notes_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+    filter: NoteFilter,
+) -> Result<Vec<Note>, String> {
+    let Some(client) = try_client(app) else {
+        return state
+            .storage
+            .list_notes(&filter)
+            .map_err(|e| e.to_string());
+    };
+    match client.list_workspace_personal().await {
+        Ok(elements) => {
+            set_last_error(app, None);
+            let mut out = Vec::new();
+            for el in elements {
+                let Some(mut remote) = workspace_element_to_note(&el) else {
+                    continue;
+                };
+                if let Ok(Some(local)) = state.storage.get_note(&remote.id) {
+                    if remote.project_id.is_none() {
+                        remote.project_id = local.project_id;
+                    }
+                }
+                state
+                    .storage
+                    .upsert_note(&remote)
+                    .map_err(|e| e.to_string())?;
+                if note_matches_filter(&remote, &filter) {
+                    out.push(remote);
+                }
+            }
+            out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            Ok(out)
+        }
+        Err(err) => {
+            set_last_error(app, Some(format!("Notes cache — {err}")));
+            state
+                .storage
+                .list_notes(&filter)
+                .map_err(|e| e.to_string())
+        }
+    }
+}
+
+pub async fn upsert_note_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+    mut note: Note,
+) -> Result<Note, String> {
+    let now = now_iso();
+    if note.id.is_empty() {
+        note.id = crate::domain::new_id();
+    }
+    if note.created_at.is_empty() {
+        note.created_at = now.clone();
+    }
+    note.updated_at = now;
+    note.body = note.body.trim().to_string();
+    if let Some(ref mut t) = note.title {
+        *t = t.trim().to_string();
+        if t.is_empty() {
+            note.title = None;
+        }
+    }
+
+    state
+        .storage
+        .upsert_note(&note)
+        .map_err(|e| e.to_string())?;
+
+    if let Some(client) = try_client(app) {
+        match client.save_workspace_element(&note).await {
+            Ok(()) => set_last_error(app, None),
+            Err(err) => set_last_error(app, Some(format!("Note locale — API: {err}"))),
+        }
+    }
+    Ok(note)
+}
+
+pub async fn create_note_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+    body: String,
+    kind: NoteKind,
+    project_id: Option<String>,
+    title: Option<String>,
+) -> Result<Note, String> {
+    let now = now_iso();
+    let title = title
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
+    let note = Note {
+        id: crate::domain::new_id(),
+        title,
+        body,
+        kind,
+        project_id,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+    upsert_note_hybrid(app, state, note).await
+}
+
+pub async fn delete_note_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+    id: &str,
+) -> Result<(), String> {
+    state.storage.delete_note(id).map_err(|e| e.to_string())?;
+    if let Some(client) = try_client(app) {
+        match client.delete_workspace_element(id).await {
+            Ok(()) => set_last_error(app, None),
+            Err(err) => set_last_error(app, Some(format!("Suppression note locale — API: {err}"))),
+        }
+    }
+    Ok(())
+}
+
 pub async fn set_task_done_hybrid(
     app: &AppHandle,
     state: &AppState,
@@ -431,12 +573,13 @@ pub async fn login(
     Ok(prefs)
 }
 
-/// Après login : tire les projets Gestion dans le cache local.
+/// Après login : tire projets + notes bureau Gestion dans le cache local.
 pub async fn sync_projects_after_login(
     app: &AppHandle,
     state: &AppState,
 ) -> Result<usize, String> {
     let rows = list_projects_hybrid(app, state).await?;
+    let _ = list_notes_hybrid(app, state, NoteFilter::default()).await;
     Ok(rows.len())
 }
 
