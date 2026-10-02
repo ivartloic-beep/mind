@@ -87,13 +87,12 @@ Paramètres restent derrière ⚙ (vue plein panneau, scroll OK **uniquement** l
 
 ### B. Prochaines briques « raccourci Gestion » (recommandées)
 
-#### 1) Zone **Déposer** (priorité haute)
+#### 1) Zone **Déposer** (priorité haute) — **livré V1**
 
-- Zone unique en bas du mode Jour : « Déposer un fichier ».
-- Au drop → **feuille courte** (pas le panneau) :
-  - Destination : Bureau · Projet · Fiche tâche · Contact CRM (si contexte).
-  - Titre optionnel.
-- Envoi via API workspace / pièce jointe tâche.
+- Zone unique sous la file du jour : « Déposer un fichier ».
+- Au drop → **feuille courte** :
+  - Destination V1 : **Bureau · Projet** (PJ tâche / CRM plus tard).
+- Envoi via `workspace_upload.php` (commande Tauri `gestion_upload_file`).
 - **Jamais** de navigateur de dossiers dans le panneau.
 
 #### 2) **Contact CRM express**
@@ -115,7 +114,8 @@ Exemple figé (pas une app drawer) :
 Chaque bouton = `gestion_show` + deep-link JS (`openMyBureau`, `openCrmPage`, liste projets).  
 Zéro sous-menu.
 
-#### 4) **File du jour intelligente** (remplace « Récent »)
+#### 4) **File du jour intelligente** (remplace « Récent ») — **livré V1**
+
 
 Au plus **4 lignes**, score simple :
 
