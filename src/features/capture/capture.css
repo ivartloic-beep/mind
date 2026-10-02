@@ -104,24 +104,86 @@
   color: var(--muted);
 }
 
-.capture-project-hint {
-  flex: 0 0 auto;
-  font-size: 0.7rem;
-  color: var(--muted);
-  opacity: 0.8;
-}
-
 .capture-project-row .project-assign-select {
   appearance: none;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--surface);
   color: var(--fg);
   border-radius: var(--control-radius);
   padding: 0.22rem 0.55rem;
   font: inherit;
   font-size: 0.78rem;
-  max-width: 12rem;
+  max-width: 11rem;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.capture-project-new,
+.capture-project-create-btn,
+.capture-project-cancel {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent-strong);
+  border-radius: var(--control-radius);
+  padding: 0.22rem 0.55rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.capture-project-new:hover:not(:disabled),
+.capture-project-create-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.capture-project-create-btn {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
+}
+
+.capture-project-cancel {
+  color: var(--muted);
+}
+
+.capture-project-cancel:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.capture-project-new:disabled,
+.capture-project-create-btn:disabled,
+.capture-project-cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.capture-project-create {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.capture-project-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: var(--control-radius);
+  padding: 0.28rem 0.55rem;
+  font: inherit;
+  font-size: 0.82rem;
+  outline: none;
+}
+
+.capture-project-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .capture-kinds {

@@ -5,7 +5,12 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { createNote, createTask, listProjects } from "../../services/api";
+import {
+  createNote,
+  createTask,
+  listProjects,
+  upsertProject,
+} from "../../services/api";
 import { captureHide } from "../../services/capture";
 import type { Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
@@ -22,11 +27,15 @@ export function CaptureApp() {
   const [kind, setKind] = useState<CaptureKind>("task");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const projectNameRef = useRef<HTMLInputElement>(null);
   const closingRef = useRef(false);
   const busyRef = useRef(false);
+  const creatingProjectRef = useRef(false);
 
   async function closeCapture() {
     if (closingRef.current) return;
@@ -42,6 +51,9 @@ export function CaptureApp() {
     setText("");
     setKind("task");
     setProjectId(null);
+    setCreatingProject(false);
+    creatingProjectRef.current = false;
+    setNewProjectName("");
     setError(null);
     setBusy(false);
     window.setTimeout(() => inputRef.current?.focus(), 30);
@@ -52,6 +64,48 @@ export function CaptureApp() {
       setProjects(await listProjects());
     } catch {
       /* hors Tauri / ignore */
+    }
+  }
+
+  function openCreateProject() {
+    setCreatingProject(true);
+    creatingProjectRef.current = true;
+    setNewProjectName("");
+    setError(null);
+    window.setTimeout(() => projectNameRef.current?.focus(), 30);
+  }
+
+  function cancelCreateProject() {
+    setCreatingProject(false);
+    creatingProjectRef.current = false;
+    setNewProjectName("");
+    window.setTimeout(() => inputRef.current?.focus(), 30);
+  }
+
+  async function createProjectAndSelect() {
+    const name = newProjectName.trim();
+    if (!name || busy) return;
+    setBusy(true);
+    busyRef.current = true;
+    setError(null);
+    try {
+      const created = await upsertProject({
+        id: "",
+        name,
+        createdAt: "",
+      });
+      await refreshProjects();
+      setProjectId(created.id);
+      setCreatingProject(false);
+      creatingProjectRef.current = false;
+      setNewProjectName("");
+      window.setTimeout(() => inputRef.current?.focus(), 30);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Création projet impossible");
+      projectNameRef.current?.focus();
+    } finally {
+      setBusy(false);
+      busyRef.current = false;
     }
   }
 
@@ -89,7 +143,7 @@ export function CaptureApp() {
       unsubs.push(unOpened);
 
       const win = getCurrentWindow();
-      // Délai : le <select> projet fait perdre le focus sous Windows.
+      // Délai : select / champ projet font perdre le focus sous Windows.
       const unFocus = await win.onFocusChanged(({ payload: focused }) => {
         if (focused) {
           if (blurTimer !== null) {
@@ -98,11 +152,13 @@ export function CaptureApp() {
           }
           return;
         }
-        if (busyRef.current) return;
+        if (busyRef.current || creatingProjectRef.current) return;
         blurTimer = window.setTimeout(() => {
           blurTimer = null;
-          if (!busyRef.current) void closeCapture();
-        }, 280);
+          if (!busyRef.current && !creatingProjectRef.current) {
+            void closeCapture();
+          }
+        }, 320);
       });
       unsubs.push(unFocus);
     }
@@ -117,10 +173,13 @@ export function CaptureApp() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        void closeCapture();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      if (creatingProjectRef.current) {
+        cancelCreateProject();
+        return;
       }
+      void closeCapture();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -128,7 +187,7 @@ export function CaptureApp() {
 
   async function submit() {
     const value = text.trim();
-    if (!value || busy) return;
+    if (!value || busy || creatingProject) return;
     setBusy(true);
     busyRef.current = true;
     setError(null);
@@ -174,7 +233,7 @@ export function CaptureApp() {
         type="text"
         value={text}
         autoFocus
-        disabled={busy}
+        disabled={busy || creatingProject}
         placeholder="Écris, puis Entrée — Échap pour fermer"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -198,7 +257,14 @@ export function CaptureApp() {
               type="button"
               className={`capture-kind ${kind === value ? "is-active" : ""}`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setKind(value)}
+              onClick={() => {
+                setKind(value);
+                if (value !== "task") {
+                  setCreatingProject(false);
+                  creatingProjectRef.current = false;
+                  setNewProjectName("");
+                }
+              }}
               disabled={busy}
             >
               {label}
@@ -208,14 +274,14 @@ export function CaptureApp() {
         <button
           type="button"
           className="capture-submit"
-          disabled={busy || !text.trim()}
+          disabled={busy || creatingProject || !text.trim()}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => void submit()}
         >
-          {busy ? "…" : "Entrée"}
+          {busy && !creatingProject ? "…" : "Entrée"}
         </button>
       </div>
-      {kind === "task" && (
+      {kind === "task" && !creatingProject && (
         <div className="capture-project-row">
           <span className="capture-project-label">Projet</span>
           <ProjectSelect
@@ -225,7 +291,54 @@ export function CaptureApp() {
             onChange={setProjectId}
             ariaLabel="Projet de la tâche (optionnel)"
           />
-          <span className="capture-project-hint">optionnel</span>
+          <button
+            type="button"
+            className="capture-project-new"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openCreateProject}
+          >
+            + Nouveau
+          </button>
+        </div>
+      )}
+      {kind === "task" && creatingProject && (
+        <div className="capture-project-create">
+          <input
+            ref={projectNameRef}
+            className="capture-project-input"
+            type="text"
+            value={newProjectName}
+            disabled={busy}
+            placeholder="Nom du projet"
+            aria-label="Nom du nouveau projet"
+            onChange={(e) => setNewProjectName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                void createProjectAndSelect();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="capture-project-create-btn"
+            disabled={busy || !newProjectName.trim()}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void createProjectAndSelect()}
+          >
+            {busy ? "…" : "Créer"}
+          </button>
+          <button
+            type="button"
+            className="capture-project-cancel"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={cancelCreateProject}
+          >
+            Annuler
+          </button>
         </div>
       )}
       <p className="capture-hint">Échap ou ✕ pour fermer sans créer</p>
