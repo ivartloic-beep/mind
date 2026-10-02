@@ -5,11 +5,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from "@tauri-apps/plugin-notification";
 import { panelSetOpen } from "../../services/panel";
 import "./timer.css";
 
@@ -88,23 +83,6 @@ function playBeep() {
   }
 }
 
-async function notifyDone() {
-  try {
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === "granted";
-    }
-    if (!granted) return;
-    await sendNotification({
-      title: "Ma Tête — Minuteur",
-      body: "Temps écoulé.",
-    });
-  } catch {
-    /* hors Tauri */
-  }
-}
-
 async function revealPanel() {
   try {
     await panelSetOpen(true);
@@ -170,7 +148,6 @@ export function TimerPanel() {
           setSnoozeOpen(false);
           setCustomOpen(false);
           void revealPanel();
-          void notifyDone();
           if (soundRef.current) playBeep();
           return 0;
         }
