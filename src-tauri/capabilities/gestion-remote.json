@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "gestion-remote",
+  "description": "Pont session : front Gestion distant → commandes MIND",
+  "windows": ["gestion"],
+  "remote": {
+    "urls": [
+      "https://gestion.louetline.fr",
+      "https://gestion.louetline.fr/*",
+      "https://*.louetline.fr",
+      "https://*.louetline.fr/*"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "core:event:default"
+  ]
+}

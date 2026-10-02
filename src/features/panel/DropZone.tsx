@@ -8,6 +8,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listProjects } from "../../services/api";
 import {
   formatInvokeError,
+  gestionEnsureSession,
   gestionGetConfig,
   gestionTasksBackendActive,
   gestionUploadFile,
@@ -58,9 +59,17 @@ async function sessionIsActive(): Promise<boolean> {
   try {
     if (await gestionTasksBackendActive()) return true;
   } catch {
-    /* fallback config */
+    /* continue */
+  }
+  // La session peut être dans la fenêtre Gestion (site) sans être encore dans les prefs panneau.
+  try {
+    const cfg = await gestionEnsureSession();
+    if (isGestionLoggedIn(cfg)) return true;
+  } catch {
+    /* continue */
   }
   try {
+    if (await gestionTasksBackendActive()) return true;
     return isGestionLoggedIn(await gestionGetConfig());
   } catch {
     return false;
@@ -98,7 +107,9 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
         onSessionResolved?.(active);
         if (!active) {
           setNeedsLogin(true);
-          setError("Connecte-toi à Gestion pour déposer un fichier.");
+          setError(
+            "Session panneau inactive — ⚙ Paramètres → Gestion → Se connecter (même si Gestion est déjà ouvert).",
+          );
           return;
         }
         setNeedsLogin(false);
@@ -137,7 +148,9 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
         onSessionResolved?.(active);
         if (!active) {
           setNeedsLogin(true);
-          setError("Connecte-toi à Gestion pour déposer un fichier.");
+          setError(
+            "Session panneau inactive — ⚙ Paramètres → Gestion → Se connecter (même si Gestion est déjà ouvert).",
+          );
           return;
         }
         setNeedsLogin(false);

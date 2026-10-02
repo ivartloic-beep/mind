@@ -63,6 +63,11 @@ export function gestionTasksBackendActive(): Promise<boolean> {
   return invoke<boolean>("gestion_tasks_backend_active");
 }
 
+/** Tire la session depuis la fenêtre Gestion si le panneau n’en a pas encore. */
+export function gestionEnsureSession(): Promise<GestionConfig> {
+  return invoke<GestionConfig>("gestion_ensure_session");
+}
+
 export type GestionSyncReport = {
   tasks: number;
   projects: number;

@@ -122,6 +122,7 @@ pub fn run() {
             windows::gestion::gestion_login,
             windows::gestion::gestion_logout,
             windows::gestion::gestion_set_session,
+            windows::gestion::gestion_ensure_session,
             windows::gestion::gestion_migrate_local_tasks,
             windows::gestion::gestion_tasks_backend_active,
             windows::gestion::gestion_sync_now,

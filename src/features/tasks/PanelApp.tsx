@@ -28,6 +28,7 @@ import {
   type ReminderDuePayload,
 } from "../../services/events";
 import {
+  gestionEnsureSession,
   gestionGetConfig,
   gestionLogin,
   gestionLogout,
@@ -121,7 +122,11 @@ export function PanelApp() {
     setLoadState("ready");
     setLoadError(null);
     try {
-      const g = await gestionGetConfig();
+      let g = await gestionGetConfig();
+      if (!isGestionLoggedIn(g)) {
+        // Session souvent seulement dans la fenêtre Gestion (site) — la tirer.
+        g = await gestionEnsureSession();
+      }
       setGestionLastError(g.lastError || null);
       const logged = isGestionLoggedIn(g);
       setGestionLoggedIn(logged);

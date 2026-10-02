@@ -112,10 +112,56 @@ fn release_input_blockers(app: &AppHandle) {
     }
 }
 
+/// Script d’init (chaque navigation Gestion) — pousse authToken → prefs MIND.
+const SESSION_BRIDGE_INIT: &str = r#"(function(){
+  if (window.__MIND_SESSION_BRIDGE__) return;
+  window.__MIND_SESSION_BRIDGE__ = true;
+  function mindInvoke(cmd, args) {
+    try {
+      var c = window.__TAURI__ && window.__TAURI__.core;
+      if (c && typeof c.invoke === 'function') return c.invoke(cmd, args);
+      if (window.__TAURI__ && typeof window.__TAURI__.invoke === 'function') {
+        return window.__TAURI__.invoke(cmd, args);
+      }
+    } catch (e) {}
+    return null;
+  }
+  function pushSession() {
+    try {
+      var t = localStorage.getItem('authToken') || window.authToken || '';
+      var u = localStorage.getItem('currentUser') || '';
+      var userId = null, userName = null;
+      if (u) {
+        try {
+          var o = JSON.parse(u);
+          if (o && o.id != null && !isNaN(Number(o.id))) userId = Number(o.id);
+          if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
+        } catch (e2) {}
+      }
+      mindInvoke('gestion_set_session', { token: t || '', userId: userId, userName: userName });
+    } catch (e) {}
+  }
+  var last = '';
+  setInterval(function(){
+    try {
+      var t = localStorage.getItem('authToken') || '';
+      var u = localStorage.getItem('currentUser') || '';
+      var cur = t + '|' + u;
+      if (cur === last) return;
+      last = cur;
+      pushSession();
+    } catch (e) {}
+  }, 1000);
+  setTimeout(pushSession, 150);
+  setTimeout(pushSession, 800);
+  setTimeout(pushSession, 2000);
+})();"#;
+
 fn inject_session_bridge(window: &WebviewWindow, prefs: &GestionPrefs) {
     let token = prefs.auth_token.clone().unwrap_or_default();
     let escaped_token = token.replace('\\', "\\\\").replace('\'', "\\'");
     let api = prefs.api_url.replace('\\', "\\\\").replace('\'', "\\'");
+    // Prefs → localStorage (si panneau déjà connecté), puis (ré)installe le pont.
     let js = format!(
         r#"(function(){{
   try {{
@@ -129,35 +175,26 @@ fn inject_session_bridge(window: &WebviewWindow, prefs: &GestionPrefs) {
         window.authToken = '{token}';
       }} catch (e) {{}}
     }}
-    if (window.__MIND_SESSION_BRIDGE__) return;
-    window.__MIND_SESSION_BRIDGE__ = true;
-    var last = '';
-    setInterval(function(){{
+  }} catch (e) {{}}
+  {bridge}
+  try {{
+    var t = localStorage.getItem('authToken') || window.authToken || '';
+    var u = localStorage.getItem('currentUser') || '';
+    var userId = null, userName = null;
+    if (u) {{
       try {{
-        var t = localStorage.getItem('authToken') || '';
-        var u = localStorage.getItem('currentUser') || '';
-        var cur = t + '|' + u;
-        if (cur === last) return;
-        last = cur;
-        var userId = null, userName = null;
-        if (u) {{
-          try {{
-            var o = JSON.parse(u);
-            if (o && o.id != null) userId = Number(o.id);
-            if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
-          }} catch (e2) {{}}
-        }}
-        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {{
-          window.__TAURI__.core.invoke('gestion_set_session', {{
-            token: t, userId: userId, userName: userName
-          }});
-        }}
-      }} catch (e) {{}}
-    }}, 1500);
+        var o = JSON.parse(u);
+        if (o && o.id != null && !isNaN(Number(o.id))) userId = Number(o.id);
+        if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
+      }} catch (e2) {{}}
+    }}
+    var c = window.__TAURI__ && window.__TAURI__.core;
+    if (c && c.invoke) c.invoke('gestion_set_session', {{ token: t || '', userId: userId, userName: userName }});
   }} catch (e) {{}}
 }})();"#,
         api = api,
-        token = escaped_token
+        token = escaped_token,
+        bridge = SESSION_BRIDGE_INIT
     );
     let _ = window.eval(&js);
 }
@@ -188,6 +225,7 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
     .focused(true)
     .center()
     .visible(false)
+    .initialization_script(SESSION_BRIDGE_INIT)
     .build()
     .map_err(|e| e.to_string())?;
 
@@ -674,6 +712,46 @@ pub async fn gestion_migrate_local_tasks(
 #[tauri::command]
 pub fn gestion_tasks_backend_active(app: AppHandle) -> bool {
     crate::gestion::tasks_backend_active(&app)
+}
+
+/// S’assure qu’une session prefs existe — tire le token depuis la fenêtre Gestion si besoin.
+#[tauri::command]
+pub async fn gestion_ensure_session(app: AppHandle) -> Result<GestionPrefs, String> {
+    if crate::gestion::try_client(&app).is_some() {
+        return Ok(load_prefs(&app));
+    }
+    let prefs = load_prefs(&app);
+    let Some(window) = app.get_webview_window(GESTION_LABEL) else {
+        return Ok(prefs);
+    };
+    inject_session_bridge(&window, &prefs);
+    let _ = window.eval(
+        r#"(function(){
+  try {
+    var t = localStorage.getItem('authToken') || window.authToken || '';
+    var u = localStorage.getItem('currentUser') || '';
+    var userId = null, userName = null;
+    if (u) {
+      try {
+        var o = JSON.parse(u);
+        if (o && o.id != null && !isNaN(Number(o.id))) userId = Number(o.id);
+        if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
+      } catch (e2) {}
+    }
+    var c = window.__TAURI__ && window.__TAURI__.core;
+    if (c && c.invoke) {
+      c.invoke('gestion_set_session', { token: t || '', userId: userId, userName: userName });
+    }
+  } catch (e) {}
+})();"#,
+    );
+    for _ in 0..30 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        if crate::gestion::try_client(&app).is_some() {
+            return Ok(load_prefs(&app));
+        }
+    }
+    Ok(load_prefs(&app))
 }
 
 /// Sync bidirectionnel immédiat (panneau ↔ Gestion).
