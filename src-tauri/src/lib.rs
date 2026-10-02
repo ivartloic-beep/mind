@@ -118,6 +118,8 @@ pub fn run() {
             windows::gestion::gestion_show_page,
             windows::gestion::gestion_show_task,
             windows::gestion::open_external_url,
+            windows::gestion::gestion_open_workspace_file,
+            windows::gestion::gestion_download_workspace_file,
             windows::gestion::gestion_get_config,
             windows::gestion::gestion_set_config,
             windows::gestion::gestion_login,

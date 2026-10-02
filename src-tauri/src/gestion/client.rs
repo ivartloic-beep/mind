@@ -926,6 +926,77 @@ impl GestionClient {
         Ok(())
     }
 
+    /// Télécharge un fichier workspace (`workspace_file.php`) avec la session MIND.
+    pub async fn fetch_workspace_file(
+        &self,
+        id: &str,
+    ) -> Result<(Vec<u8>, String, Option<String>), String> {
+        let id = id.trim();
+        if id.is_empty() {
+            return Err("id fichier manquant".into());
+        }
+        let (bearer, raw) = self.auth_headers()?;
+        let url = format!(
+            "{}?id={}&token={}&download=1",
+            self.url("workspace_file.php"),
+            urlencoding_lite(id),
+            urlencoding_lite(&raw)
+        );
+        let res = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .timeout(std::time::Duration::from_secs(120))
+            .send()
+            .await
+            .map_err(|e| format!("réseau fichier: {e}"))?;
+        let status = res.status();
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée — reconnecte-toi".into());
+        }
+        if !status.is_success() {
+            let text = res.text().await.unwrap_or_default();
+            let snippet: String = text.chars().take(160).collect();
+            return Err(format!(
+                "fichier HTTP {status}{}",
+                if snippet.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {snippet}")
+                }
+            ));
+        }
+        let mime = res
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.split(';').next().unwrap_or(s).trim().to_string())
+            .filter(|s| !s.is_empty());
+        let filename = res
+            .headers()
+            .get(reqwest::header::CONTENT_DISPOSITION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(filename_from_content_disposition)
+            .unwrap_or_else(|| format!("gestion-{id}"));
+        let bytes = res
+            .bytes()
+            .await
+            .map_err(|e| format!("lecture fichier: {e}"))?
+            .to_vec();
+        if bytes.is_empty() {
+            return Err("Fichier vide".into());
+        }
+        // Évite d’ouvrir une page d’erreur HTML comme « document ».
+        if let Some(m) = mime.as_deref() {
+            if m.starts_with("text/html") {
+                let snippet: String = String::from_utf8_lossy(&bytes).chars().take(120).collect();
+                return Err(format!("réponse HTML au lieu du fichier: {snippet}"));
+            }
+        }
+        Ok((bytes, filename, mime))
+    }
+
     /// Upload fichier → `workspace_upload.php` (bureau personal ou projet team).
     pub async fn upload_workspace_file(
         &self,
@@ -1024,6 +1095,67 @@ impl GestionClient {
         }
         Ok(parsed)
     }
+}
+
+fn filename_from_content_disposition(header: &str) -> Option<String> {
+    // filename="x.pdf" ou filename*=UTF-8''x.pdf
+    if let Some(rest) = header
+        .split("filename*=UTF-8''")
+        .nth(1)
+        .or_else(|| header.split("filename*=utf-8''").nth(1))
+    {
+        let raw = rest.split(';').next()?.trim().trim_matches('"');
+        if !raw.is_empty() {
+            return Some(
+                percent_decode_lite(raw)
+                    .chars()
+                    .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
+                    .collect(),
+            );
+        }
+    }
+    let lower = header.to_ascii_lowercase();
+    let idx = lower.find("filename=")?;
+    let mut raw = header[idx + "filename=".len()..].trim();
+    if let Some(end) = raw.find(';') {
+        raw = &raw[..end];
+    }
+    raw = raw.trim().trim_matches('"');
+    if raw.is_empty() {
+        None
+    } else {
+        Some(
+            raw.chars()
+                .map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') { '_' } else { c })
+                .collect(),
+        )
+    }
+}
+
+fn percent_decode_lite(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let h = |c: u8| -> Option<u8> {
+                match c {
+                    b'0'..=b'9' => Some(c - b'0'),
+                    b'a'..=b'f' => Some(c - b'a' + 10),
+                    b'A'..=b'F' => Some(c - b'A' + 10),
+                    _ => None,
+                }
+            };
+            if let (Some(a), Some(b)) = (h(bytes[i + 1]), h(bytes[i + 2])) {
+                out.push((a << 4) | b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Encodage query minimal (évite dépendance urlencoding).

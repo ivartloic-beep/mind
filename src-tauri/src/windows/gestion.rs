@@ -147,10 +147,8 @@ fn release_input_blockers(app: &AppHandle) {
     }
 }
 
-/// Script d’init (chaque navigation Gestion) — pousse authToken → prefs MIND.
-const SESSION_BRIDGE_INIT: &str = r#"(function(){
-  if (window.__MIND_SESSION_BRIDGE__) return;
-  window.__MIND_SESSION_BRIDGE__ = true;
+/// Patch docs (réappliqué souvent — le front Gestion peut redéfinir les fonctions).
+const DOC_OPEN_PATCH: &str = r#"(function(){
   function mindInvoke(cmd, args) {
     try {
       var c = window.__TAURI__ && window.__TAURI__.core;
@@ -159,74 +157,171 @@ const SESSION_BRIDGE_INIT: &str = r#"(function(){
         return window.__TAURI__.invoke(cmd, args);
       }
     } catch (e) {}
-    return null;
+    return Promise.reject(new Error('IPC MIND indisponible'));
   }
-  function pushSession() {
+  function toast(msg, kind) {
     try {
-      var t = localStorage.getItem('authToken') || window.authToken || '';
-      var u = localStorage.getItem('currentUser') || '';
-      var userId = null, userName = null;
-      if (u) {
-        try {
-          var o = JSON.parse(u);
-          if (o && o.id != null && !isNaN(Number(o.id))) userId = Number(o.id);
-          if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
-        } catch (e2) {}
-      }
-      mindInvoke('gestion_set_session', { token: t || '', userId: userId, userName: userName });
-    } catch (e) {}
+      if (typeof showToast === 'function') showToast(msg, kind || 'error');
+      else console.warn(msg);
+    } catch (e) { console.warn(msg); }
   }
-  var last = '';
-  setInterval(function(){
+  function idFromUrl(url) {
     try {
-      var t = localStorage.getItem('authToken') || '';
-      var u = localStorage.getItem('currentUser') || '';
-      var cur = t + '|' + u;
-      if (cur === last) return;
-      last = cur;
-      pushSession();
-    } catch (e) {}
-  }, 1000);
-  // WebView Tauri bloque window.open / <a download> croisés → OS.
-  try {
-    function mindOpenUrl(url) {
-      try {
-        var c = window.__TAURI__ && window.__TAURI__.core;
-        if (c && typeof c.invoke === 'function') {
-          c.invoke('open_external_url', { url: String(url) });
-          return true;
-        }
-      } catch (e) {}
-      return false;
+      var u = new URL(String(url), window.location.href);
+      return u.searchParams.get('id');
+    } catch (e) {
+      var m = String(url).match(/[?&]id=([^&]+)/);
+      return m ? decodeURIComponent(m[1]) : null;
     }
-    window.__MIND_NATIVE_OPEN__ = window.__MIND_NATIVE_OPEN__ || window.open;
+  }
+  function patchDocFns() {
+    window.openWpWorkspaceFile = function(elementId) {
+      if (!elementId) return;
+      mindInvoke('gestion_open_workspace_file', { id: String(elementId) }).catch(function(err) {
+        toast('❌ Ouverture: ' + (err && err.message ? err.message : err));
+      });
+    };
+    window.downloadWpWorkspaceFile = function(elementId) {
+      if (!elementId) return;
+      mindInvoke('gestion_download_workspace_file', { id: String(elementId) }).catch(function(err) {
+        toast('❌ Téléchargement: ' + (err && err.message ? err.message : err));
+      });
+    };
+  }
+  patchDocFns();
+  if (!window.__MIND_DOC_PATCH_TIMER__) {
+    window.__MIND_DOC_PATCH_TIMER__ = setInterval(patchDocFns, 1500);
+  }
+  if (!window.__MIND_DOC_OPEN_HOOK__) {
+    window.__MIND_DOC_OPEN_HOOK__ = true;
+    window.__MIND_NATIVE_OPEN__ = window.open;
     window.open = function(url, target, features) {
       if (!url) return null;
-      if (mindOpenUrl(url)) return null;
+      var s = String(url);
+      if (s.indexOf('workspace_file.php') !== -1 || s.indexOf('/uploads/') !== -1) {
+        var id = idFromUrl(s);
+        var dl = s.indexOf('download=1') !== -1;
+        if (id) {
+          mindInvoke(dl ? 'gestion_download_workspace_file' : 'gestion_open_workspace_file', { id: id })
+            .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+          return null;
+        }
+        mindInvoke('open_external_url', { url: s }).catch(function(){});
+        return null;
+      }
       if (typeof window.__MIND_NATIVE_OPEN__ === 'function') {
         return window.__MIND_NATIVE_OPEN__.call(window, url, target, features);
       }
       return null;
     };
-    if (!window.__MIND_DOC_CLICK__) {
-      window.__MIND_DOC_CLICK__ = true;
-      document.addEventListener('click', function(ev) {
-        try {
-          var t = ev.target;
-          if (!t || !t.closest) return;
-          var a = t.closest('a[href*="workspace_file.php"], a[download]');
-          if (!a || !a.href) return;
-          if (a.href.indexOf('workspace_file.php') === -1 && a.href.indexOf('/uploads/') === -1) return;
+    document.addEventListener('click', function(ev) {
+      try {
+        var t = ev.target;
+        if (!t || !t.closest) return;
+        var btn = t.closest('button');
+        if (btn) {
+          var oc = btn.getAttribute('onclick') || '';
+          var mOpen = oc.match(/openWpWorkspaceFile\('([^']+)'\)/);
+          var mDl = oc.match(/downloadWpWorkspaceFile\('([^']+)'\)/);
+          if (mOpen) {
+            ev.preventDefault();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            else ev.stopPropagation();
+            window.openWpWorkspaceFile(mOpen[1]);
+            return;
+          }
+          if (mDl) {
+            ev.preventDefault();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            else ev.stopPropagation();
+            window.downloadWpWorkspaceFile(mDl[1]);
+            return;
+          }
+        }
+        // Clic direct sur aperçu (div onclick=openWpWorkspaceFile) — sans bouton.
+        var preview = t.closest('[onclick*="openWpWorkspaceFile"], [onclick*="downloadWpWorkspaceFile"]');
+        if (preview) {
+          var poc = preview.getAttribute('onclick') || '';
+          var pOpen = poc.match(/openWpWorkspaceFile\('([^']+)'\)/);
+          var pDl = poc.match(/downloadWpWorkspaceFile\('([^']+)'\)/);
+          if (pOpen) {
+            ev.preventDefault();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            else ev.stopPropagation();
+            window.openWpWorkspaceFile(pOpen[1]);
+            return;
+          }
+          if (pDl) {
+            ev.preventDefault();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            else ev.stopPropagation();
+            window.downloadWpWorkspaceFile(pDl[1]);
+            return;
+          }
+        }
+        var a = t.closest('a[href*="workspace_file.php"], a[href*="/uploads/"]');
+        if (a && a.href) {
           ev.preventDefault();
-          ev.stopPropagation();
-          mindOpenUrl(a.href);
-        } catch (e) {}
-      }, true);
+          if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+          else ev.stopPropagation();
+          var id = idFromUrl(a.href);
+          var dl = a.href.indexOf('download=1') !== -1 || a.hasAttribute('download');
+          if (id) {
+            mindInvoke(dl ? 'gestion_download_workspace_file' : 'gestion_open_workspace_file', { id: id })
+              .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+          } else {
+            mindInvoke('open_external_url', { url: a.href }).catch(function(){});
+          }
+        }
+      } catch (e) {}
+    }, true);
+  }
+})();"#;
+
+/// Script d’init (chaque navigation Gestion) — session + patch docs.
+const SESSION_BRIDGE_INIT: &str = r#"(function(){
+  if (!window.__MIND_SESSION_BRIDGE__) {
+    window.__MIND_SESSION_BRIDGE__ = true;
+    function mindInvoke(cmd, args) {
+      try {
+        var c = window.__TAURI__ && window.__TAURI__.core;
+        if (c && typeof c.invoke === 'function') return c.invoke(cmd, args);
+        if (window.__TAURI__ && typeof window.__TAURI__.invoke === 'function') {
+          return window.__TAURI__.invoke(cmd, args);
+        }
+      } catch (e) {}
+      return null;
     }
-  } catch (e) {}
-  setTimeout(pushSession, 150);
-  setTimeout(pushSession, 800);
-  setTimeout(pushSession, 2000);
+    function pushSession() {
+      try {
+        var t = localStorage.getItem('authToken') || window.authToken || '';
+        var u = localStorage.getItem('currentUser') || '';
+        var userId = null, userName = null;
+        if (u) {
+          try {
+            var o = JSON.parse(u);
+            if (o && o.id != null && !isNaN(Number(o.id))) userId = Number(o.id);
+            if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
+          } catch (e2) {}
+        }
+        mindInvoke('gestion_set_session', { token: t || '', userId: userId, userName: userName });
+      } catch (e) {}
+    }
+    var last = '';
+    setInterval(function(){
+      try {
+        var t = localStorage.getItem('authToken') || '';
+        var u = localStorage.getItem('currentUser') || '';
+        var cur = t + '|' + u;
+        if (cur === last) return;
+        last = cur;
+        pushSession();
+      } catch (e) {}
+    }, 1000);
+    setTimeout(pushSession, 150);
+    setTimeout(pushSession, 800);
+    setTimeout(pushSession, 2000);
+  }
 })();"#;
 
 fn inject_session_bridge(window: &WebviewWindow, prefs: &GestionPrefs) {
@@ -249,6 +344,7 @@ fn inject_session_bridge(window: &WebviewWindow, prefs: &GestionPrefs) {
     }}
   }} catch (e) {{}}
   {bridge}
+  {docs}
   try {{
     var t = localStorage.getItem('authToken') || window.authToken || '';
     var u = localStorage.getItem('currentUser') || '';
@@ -266,7 +362,8 @@ fn inject_session_bridge(window: &WebviewWindow, prefs: &GestionPrefs) {
 }})();"#,
         api = api,
         token = escaped_token,
-        bridge = SESSION_BRIDGE_INIT
+        bridge = SESSION_BRIDGE_INIT,
+        docs = DOC_OPEN_PATCH
     );
     let _ = window.eval(&js);
 }
@@ -277,13 +374,18 @@ fn parse_front_url(api_url: &str) -> Result<Url, String> {
 }
 
 fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> {
+    // Recréer si besoin d’attacher on_new_window / on_download (handlers au build seulement).
     if let Some(existing) = app.get_webview_window(GESTION_LABEL) {
-        // Ne pas re-naviguer si déjà sur Gestion — évite de perdre l’état UI.
-        let _ = existing;
+        // Réinjecte le patch docs même sur fenêtre déjà ouverte.
+        let prefs = load_prefs(app);
+        inject_session_bridge(&existing, &prefs);
         return Ok(existing);
     }
 
     let app_for_new = app.clone();
+    let app_for_docs = app.clone();
+    let app_for_docs_dl = app.clone();
+    let init_script = format!("{SESSION_BRIDGE_INIT}\n{DOC_OPEN_PATCH}");
     let window = WebviewWindowBuilder::new(
         app,
         GESTION_LABEL,
@@ -298,16 +400,34 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
     .focused(true)
     .center()
     .visible(false)
-    .initialization_script(SESSION_BRIDGE_INIT)
-    // Docs projet / bureau : window.open → navigateur / visionneuse système.
+    .initialization_script(init_script)
+    // Docs projet / bureau : window.open → fetch Rust + ouverture OS (fallback sans IPC).
     .on_new_window(move |url, _features| {
         let url_str = url.to_string();
-        // Fichiers API : ouvrir hors WebView (sinon bloqué).
         if url_str.contains("workspace_file.php")
             || url_str.contains("/uploads/")
             || url_str.contains("download=1")
         {
-            let _ = open_url_os(&url_str);
+            let id = url
+                .query_pairs()
+                .find(|(k, _)| k == "id")
+                .map(|(_, v)| v.to_string());
+            let download = url_str.contains("download=1");
+            if let Some(id) = id {
+                let app = app_for_docs.clone();
+                tauri::async_runtime::spawn(async move {
+                    let cmd = if download {
+                        gestion_download_workspace_file(app, id).await
+                    } else {
+                        gestion_open_workspace_file(app, id).await
+                    };
+                    if let Err(err) = cmd {
+                        eprintln!("[mind] doc workspace: {err}");
+                    }
+                });
+            } else {
+                let _ = open_url_os(&url_str);
+            }
             return NewWindowResponse::Deny;
         }
         // Autre popup : petite fenêtre Tauri dédiée.
@@ -330,9 +450,26 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
         }
     })
     // Téléchargements (Content-Disposition) → dossier Téléchargements.
-    .on_download(|_webview, event| {
+    .on_download(move |_webview, event| {
         match event {
             DownloadEvent::Requested { url, destination } => {
+                // Si c’est un workspace_file, on laisse le JS/IPC gérer (auth MIND).
+                let url_str = url.to_string();
+                if url_str.contains("workspace_file.php") {
+                    if let Some(id) = url
+                        .query_pairs()
+                        .find(|(k, _)| k == "id")
+                        .map(|(_, v)| v.to_string())
+                    {
+                        let app = app_for_docs_dl.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(err) = gestion_download_workspace_file(app, id).await {
+                                eprintln!("[mind] download workspace: {err}");
+                            }
+                        });
+                        return false; // annule le download WebView (sans session)
+                    }
+                }
                 let name = filename_from_url(&url);
                 *destination = downloads_dir().join(name);
                 true
@@ -417,6 +554,57 @@ pub fn open_external_url(url: String) -> Result<(), String> {
         return Err("Aperçu blob non supporté hors WebView".into());
     }
     open_url_os(url)
+}
+
+async fn fetch_workspace_bytes(
+    app: &AppHandle,
+    id: &str,
+) -> Result<(Vec<u8>, String), String> {
+    // Tente d’abord la session prefs ; sinon tire depuis la fenêtre Gestion.
+    if crate::gestion::try_client(app).is_none() {
+        let _ = gestion_ensure_session(app.clone()).await?;
+    }
+    let client = crate::gestion::try_client(app)
+        .ok_or_else(|| {
+            "Session Gestion absente — ⚙ Paramètres → Se connecter".to_string()
+        })?;
+    let (bytes, filename, _mime) = client.fetch_workspace_file(id).await?;
+    Ok((bytes, filename))
+}
+
+/// Ouvre un document workspace (projet / bureau) via l’OS (télécharge puis ouvre).
+#[tauri::command]
+pub async fn gestion_open_workspace_file(app: AppHandle, id: String) -> Result<(), String> {
+    let (bytes, filename) = fetch_workspace_bytes(&app, &id).await?;
+    let path = std::env::temp_dir().join(format!("mind-{}", filename));
+    fs::write(&path, &bytes).map_err(|e| format!("écriture temp: {e}"))?;
+    open::that(&path).map_err(|e| format!("ouverture: {e}"))
+}
+
+/// Télécharge un document workspace dans le dossier Téléchargements puis l’ouvre.
+#[tauri::command]
+pub async fn gestion_download_workspace_file(app: AppHandle, id: String) -> Result<(), String> {
+    let (bytes, filename) = fetch_workspace_bytes(&app, &id).await?;
+    let path = downloads_dir().join(&filename);
+    // Évite d’écraser silencieusement.
+    let path = if path.exists() {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("fichier");
+        let ext = path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|e| format!(".{e}"))
+            .unwrap_or_default();
+        downloads_dir().join(format!(
+            "{}-{}{}",
+            stem,
+            chrono::Utc::now().timestamp(),
+            ext
+        ))
+    } else {
+        path
+    };
+    fs::write(&path, &bytes).map_err(|e| format!("écriture: {e}"))?;
+    open::that(&path).map_err(|e| format!("ouverture: {e}"))
 }
 
 #[derive(Debug, Clone, Serialize)]

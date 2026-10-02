@@ -1,0 +1,89 @@
+[[permission]]
+identifier = "allow-mind-commands"
+description = """
+Toutes les commandes MIND pour les fenêtres locales (panel, capture, library, post-it).
+Requis dès qu’un AppManifest / permissions/ existe — sinon l’ACL bloque aussi le local.
+"""
+commands.allow = [
+  "ping",
+  "list_projects",
+  "get_project",
+  "upsert_project",
+  "delete_project",
+  "list_tasks",
+  "get_task",
+  "upsert_task",
+  "delete_task",
+  "create_task",
+  "set_task_done",
+  "list_notes",
+  "get_note",
+  "upsert_note",
+  "delete_note",
+  "create_note",
+  "list_reminders",
+  "get_reminder",
+  "upsert_reminder",
+  "delete_reminder",
+  "list_postits",
+  "get_postit",
+  "upsert_postit",
+  "delete_postit",
+  "panel_get_state",
+  "panel_set_open",
+  "panel_set_always_on_top",
+  "panel_redock",
+  "capture_show",
+  "capture_show_with_kind",
+  "capture_hide",
+  "library_show",
+  "gestion_show",
+  "gestion_show_page",
+  "gestion_show_task",
+  "open_external_url",
+  "gestion_open_workspace_file",
+  "gestion_download_workspace_file",
+  "gestion_get_config",
+  "gestion_set_config",
+  "gestion_login",
+  "gestion_logout",
+  "gestion_set_session",
+  "gestion_ensure_session",
+  "gestion_migrate_local_tasks",
+  "gestion_tasks_backend_active",
+  "gestion_sync_now",
+  "peek_dropped_file",
+  "read_dropped_file",
+  "gestion_upload_file",
+  "gestion_upload_file_path",
+  "create_scratch_postit",
+  "postit_open_for_note",
+  "postit_close",
+  "postit_update_geometry",
+  "postit_set_always_on_top",
+  "set_task_reminder",
+  "clear_task_reminder",
+  "snooze_reminder",
+  "dismiss_reminder",
+  "open_task_from_reminder",
+  "autostart_set_enabled",
+  "autostart_is_enabled",
+  "list_shortcuts",
+  "sync_get_config",
+  "sync_set_config",
+  "sync_test",
+  "sync_now"
+]
+
+[[permission]]
+identifier = "allow-gestion-remote-bridge"
+description = """
+Pont minimal pour le front Gestion distant (https://gestion.louetline.fr) :
+sync session + ouvrir/télécharger documents workspace.
+"""
+commands.allow = [
+  "gestion_set_session",
+  "open_external_url",
+  "gestion_open_workspace_file",
+  "gestion_download_workspace_file"
+]
