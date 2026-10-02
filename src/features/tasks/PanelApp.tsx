@@ -2,7 +2,8 @@
  * Panneau compact — actions + 5 dernières tâches / notes + minuteur.
  */
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   autostartIsEnabled,
   autostartSetEnabled,
@@ -35,6 +36,7 @@ import {
   gestionMigrateLocalTasks,
   gestionSetConfig,
   gestionShow,
+  gestionSyncNow,
   isGestionLoggedIn,
 } from "../../services/gestion";
 import { libraryShow } from "../../services/library";
@@ -118,6 +120,7 @@ export function PanelApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloudEdit, setCloudEdit] = useState(false);
   const [, startTransition] = useTransition();
+  const gestionLoggedInRef = useRef(false);
 
   const refresh = useCallback(async () => {
     const [taskRows, noteRows] = await Promise.all([
@@ -131,12 +134,24 @@ export function PanelApp() {
     try {
       const g = await gestionGetConfig();
       setGestionLastError(g.lastError || null);
-      setGestionLoggedIn(isGestionLoggedIn(g));
+      const logged = isGestionLoggedIn(g);
+      setGestionLoggedIn(logged);
+      gestionLoggedInRef.current = logged;
       setGestionUser(g.userName || null);
     } catch {
       /* ignore */
     }
   }, []);
+
+  const pullGestion = useCallback(async () => {
+    if (!gestionLoggedInRef.current) return;
+    try {
+      await gestionSyncNow();
+      await refresh();
+    } catch {
+      /* ignore — lastError via prefs */
+    }
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,11 +247,33 @@ export function PanelApp() {
       setSettingsOpen(true);
     }).then((fn) => unlistens.push(fn));
 
+    // Gestion → panneau : sync au focus du panneau + polling.
+    void (async () => {
+      try {
+        const win = getCurrentWindow();
+        const unFocus = await win.onFocusChanged(({ payload: focused }) => {
+          if (focused && gestionLoggedInRef.current) {
+            void pullGestion();
+          }
+        });
+        unlistens.push(unFocus);
+      } catch {
+        /* hors Tauri */
+      }
+    })();
+
+    const poll = window.setInterval(() => {
+      if (gestionLoggedInRef.current) {
+        void pullGestion();
+      }
+    }, 20_000);
+    unlistens.push(() => window.clearInterval(poll));
+
     return () => {
       cancelled = true;
       for (const fn of unlistens) fn();
     };
-  }, [refresh]);
+  }, [refresh, pullGestion]);
 
   async function toggleOpen() {
     const next = !open;
@@ -621,10 +658,40 @@ export function PanelApp() {
               {gestionLoggedIn ? (
                 <>
                   <p className="panel-muted">
-                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Tâches,
-                    projets et notes (bureau) synchronisés avec Gestion.
+                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Sync
+                    bidirectionnelle : tâches, projets, notes (bureau).
                   </p>
                   <div className="panel-actions">
+                    <button
+                      type="button"
+                      className="panel-action-btn is-primary"
+                      disabled={gestionBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setGestionBusy(true);
+                          setGestionMsg(null);
+                          try {
+                            const report = await gestionSyncNow();
+                            setGestionMsg(
+                              report.active
+                                ? `Sync OK — ${report.tasks} tâches, ${report.projects} projets, ${report.notes} notes`
+                                : "Session Gestion inactive",
+                            );
+                            await refresh();
+                          } catch (err) {
+                            setGestionMsg(
+                              err instanceof Error
+                                ? err.message
+                                : "Sync impossible",
+                            );
+                          } finally {
+                            setGestionBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      Synchroniser maintenant
+                    </button>
                     <button
                       type="button"
                       className="panel-action-btn"
@@ -747,8 +814,9 @@ export function PanelApp() {
                             setGestionUser(cfg.userName || null);
                             setGestionPassword("");
                             setGestionMsg(
-                              "Connecté — tâches et projets synchronisés",
+                              "Connecté — sync tâches, projets et notes",
                             );
+                            await gestionSyncNow();
                             await listProjects();
                             await refresh();
                           } catch (err) {

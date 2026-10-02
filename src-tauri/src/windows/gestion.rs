@@ -307,7 +307,11 @@ pub fn gestion_set_session(
     user_id: Option<i64>,
     user_name: Option<String>,
 ) -> Result<GestionPrefs, String> {
-    crate::gestion::set_session(&app, token, user_id, user_name)
+    let prefs = crate::gestion::set_session(&app, token, user_id, user_name)?;
+    if prefs.auth_token.as_deref().map(|t| !t.is_empty()).unwrap_or(false) {
+        crate::gestion::schedule_sync(&app);
+    }
+    Ok(prefs)
 }
 
 #[tauri::command]
@@ -321,4 +325,52 @@ pub async fn gestion_migrate_local_tasks(
 #[tauri::command]
 pub fn gestion_tasks_backend_active(app: AppHandle) -> bool {
     crate::gestion::tasks_backend_active(&app)
+}
+
+/// Sync bidirectionnel immédiat (panneau ↔ Gestion).
+#[tauri::command]
+pub async fn gestion_sync_now(
+    app: AppHandle,
+) -> Result<crate::gestion::SyncReport, String> {
+    let state = app.state::<crate::state::AppState>();
+    let report = crate::gestion::sync_bidirectional(&app, &state).await?;
+    if report.active {
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "sync".into(),
+                id: format!(
+                    "gestion:{}:{}:{}",
+                    report.tasks, report.projects, report.notes
+                ),
+            },
+        );
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "task".into(),
+                id: "pull".into(),
+            },
+        );
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "note".into(),
+                id: "pull".into(),
+            },
+        );
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "project".into(),
+                id: "pull".into(),
+            },
+        );
+    }
+    Ok(report)
+}
+
+/// Après fermeture / masquage de la fenêtre Gestion : re-tire les données.
+pub fn on_gestion_hidden(app: &AppHandle) {
+    crate::gestion::schedule_sync(app);
 }

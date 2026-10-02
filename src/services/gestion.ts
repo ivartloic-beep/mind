@@ -51,6 +51,18 @@ export function gestionTasksBackendActive(): Promise<boolean> {
   return invoke<boolean>("gestion_tasks_backend_active");
 }
 
+export type GestionSyncReport = {
+  tasks: number;
+  projects: number;
+  notes: number;
+  active: boolean;
+};
+
+/** Sync bidirectionnel panneau ↔ Gestion (tâches, projets, notes bureau). */
+export function gestionSyncNow(): Promise<GestionSyncReport> {
+  return invoke<GestionSyncReport>("gestion_sync_now");
+}
+
 export function isGestionLoggedIn(cfg: GestionConfig | null | undefined): boolean {
   return Boolean(cfg?.apiUrl?.trim() && cfg?.authToken?.trim());
 }

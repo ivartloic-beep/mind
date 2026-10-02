@@ -91,6 +91,15 @@ export function LibraryApp() {
       }
     })();
 
+    // Recharge quand le panneau tire Gestion → MIND.
+    const poll = window.setInterval(() => {
+      startTransition(() => {
+        void refreshProjects().catch(() => undefined);
+        void refreshTasks(filterRef.current).catch(() => undefined);
+        void refreshNotes(filterRef.current).catch(() => undefined);
+      });
+    }, 25_000);
+
     let unlisten: (() => void) | undefined;
     void listenDataChanged((payload) => {
       if (payload.entity === "project") {
@@ -108,12 +117,20 @@ export function LibraryApp() {
           void refreshNotes(filterRef.current).catch(() => undefined);
         });
       }
+      if (payload.entity === "sync") {
+        startTransition(() => {
+          void refreshProjects().catch(() => undefined);
+          void refreshTasks(filterRef.current).catch(() => undefined);
+          void refreshNotes(filterRef.current).catch(() => undefined);
+        });
+      }
     }).then((fn) => {
       unlisten = fn;
     });
 
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
       unlisten?.();
     };
   }, [refreshNotes, refreshProjects, refreshTasks]);

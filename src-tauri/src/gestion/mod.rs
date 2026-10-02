@@ -4,7 +4,7 @@ mod client;
 
 pub use client::{GestionClient, MigrateReport};
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::domain::{
     now_iso, CreateTaskInput, Note, NoteFilter, NoteKind, Project, Task, TaskFilter, TaskPriority,
@@ -118,15 +118,41 @@ pub async fn list_tasks_hybrid(
 
     match client.list_tasks(None).await {
         Ok(remote) => {
+            use std::collections::HashSet;
             set_last_error(app, None);
             let projects = list_projects_hybrid(app, state).await.unwrap_or_default();
+            let mut remote_ids = HashSet::new();
             let mut merged = Vec::with_capacity(remote.len());
             for r in remote {
+                remote_ids.insert(r.id.clone());
                 let local = state.storage.get_task(&r.id).map_err(|e| e.to_string())?;
                 let task = merge_remote_with_local(r, local.as_ref(), &projects);
                 state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
                 merged.push(task);
             }
+
+            // Panneau → Gestion : pousser les tâches locales absentes de personal_tasks.
+            let locals = state
+                .storage
+                .list_tasks(&TaskFilter::default())
+                .map_err(|e| e.to_string())?;
+            for local in locals {
+                if remote_ids.contains(&local.id) {
+                    continue;
+                }
+                match client.create_task(&local).await {
+                    Ok(()) => {
+                        let _ = client.update_task(&local).await;
+                        remote_ids.insert(local.id.clone());
+                        merged.push(local);
+                    }
+                    Err(_) => {
+                        // Garder en cache local si l’API refuse.
+                        merged.push(local);
+                    }
+                }
+            }
+
             Ok(apply_local_filter(merged, &filter))
         }
         Err(err) => {
@@ -392,24 +418,6 @@ pub async fn delete_project_hybrid(
 
 // --- Notes / idées → bureau Gestion (workspace.php visibility=personal) ---
 
-fn note_matches_filter(note: &Note, filter: &NoteFilter) -> bool {
-    if let Some(true) = filter.no_project {
-        if note.project_id.is_some() {
-            return false;
-        }
-    } else if let Some(ref pid) = filter.project_id {
-        if note.project_id.as_deref() != Some(pid.as_str()) {
-            return false;
-        }
-    }
-    if let Some(kind) = filter.kind {
-        if note.kind != kind {
-            return false;
-        }
-    }
-    true
-}
-
 pub async fn list_notes_hybrid(
     app: &AppHandle,
     state: &AppState,
@@ -423,12 +431,14 @@ pub async fn list_notes_hybrid(
     };
     match client.list_workspace_personal().await {
         Ok(elements) => {
+            use std::collections::HashSet;
             set_last_error(app, None);
-            let mut out = Vec::new();
+            let mut remote_ids = HashSet::new();
             for el in elements {
                 let Some(mut remote) = workspace_element_to_note(&el) else {
                     continue;
                 };
+                remote_ids.insert(remote.id.clone());
                 if let Ok(Some(local)) = state.storage.get_note(&remote.id) {
                     if remote.project_id.is_none() {
                         remote.project_id = local.project_id;
@@ -438,12 +448,32 @@ pub async fn list_notes_hybrid(
                     .storage
                     .upsert_note(&remote)
                     .map_err(|e| e.to_string())?;
-                if note_matches_filter(&remote, &filter) {
-                    out.push(remote);
+            }
+
+            // Panneau → Gestion : pousser les notes locales absentes du bureau.
+            let locals = state
+                .storage
+                .list_notes(&NoteFilter::default())
+                .map_err(|e| e.to_string())?;
+            for local in &locals {
+                if remote_ids.contains(&local.id) {
+                    continue;
+                }
+                // Notes déjà issues du bureau puis supprimées côté Gestion.
+                if local.id.starts_with("ws_") {
+                    let _ = state.storage.delete_note(&local.id);
+                    continue;
+                }
+                if let Ok(()) = client.save_workspace_element(local).await {
+                    remote_ids.insert(local.id.clone());
                 }
             }
-            out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-            Ok(out)
+
+            // Liste finale depuis le cache (les deux sens).
+            state
+                .storage
+                .list_notes(&filter)
+                .map_err(|e| e.to_string())
         }
         Err(err) => {
             set_last_error(app, Some(format!("Notes cache — {err}")));
@@ -578,9 +608,103 @@ pub async fn sync_projects_after_login(
     app: &AppHandle,
     state: &AppState,
 ) -> Result<usize, String> {
-    let rows = list_projects_hybrid(app, state).await?;
-    let _ = list_notes_hybrid(app, state, NoteFilter::default()).await;
-    Ok(rows.len())
+    let report = sync_bidirectional(app, state).await?;
+    Ok(report.projects)
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncReport {
+    pub tasks: usize,
+    pub projects: usize,
+    pub notes: usize,
+    pub active: bool,
+}
+
+/// Sync bidirectionnel panneau ↔ Gestion (pull API + push locaux orphelins).
+pub async fn sync_bidirectional(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<SyncReport, String> {
+    if try_client(app).is_none() {
+        return Ok(SyncReport {
+            tasks: 0,
+            projects: 0,
+            notes: 0,
+            active: false,
+        });
+    }
+    let projects = list_projects_hybrid(app, state).await?;
+    let tasks = list_tasks_hybrid(app, state, TaskFilter::default()).await?;
+    let notes = list_notes_hybrid(app, state, NoteFilter::default()).await?;
+    Ok(SyncReport {
+        tasks: tasks.len(),
+        projects: projects.len(),
+        notes: notes.len(),
+        active: true,
+    })
+}
+
+/// Lance un sync en arrière-plan et notifie l’UI (`data-changed`).
+/// Debounce ~8s pour éviter de spammer l’API.
+pub fn schedule_sync(app: &AppHandle) {
+    if try_client(app).is_none() {
+        return;
+    }
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static LAST_MS: AtomicU64 = AtomicU64::new(0);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let prev = LAST_MS.load(Ordering::Relaxed);
+    if now.saturating_sub(prev) < 8_000 {
+        return;
+    }
+    LAST_MS.store(now, Ordering::Relaxed);
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<AppState>();
+        match sync_bidirectional(&app, &state).await {
+            Ok(report) if report.active => {
+                use tauri::Emitter;
+                let _ = app.emit(
+                    "data-changed",
+                    crate::domain::DataChangedPayload {
+                        entity: "sync".into(),
+                        id: format!(
+                            "gestion:{}:{}:{}",
+                            report.tasks, report.projects, report.notes
+                        ),
+                    },
+                );
+                let _ = app.emit(
+                    "data-changed",
+                    crate::domain::DataChangedPayload {
+                        entity: "task".into(),
+                        id: "pull".into(),
+                    },
+                );
+                let _ = app.emit(
+                    "data-changed",
+                    crate::domain::DataChangedPayload {
+                        entity: "note".into(),
+                        id: "pull".into(),
+                    },
+                );
+                let _ = app.emit(
+                    "data-changed",
+                    crate::domain::DataChangedPayload {
+                        entity: "project".into(),
+                        id: "pull".into(),
+                    },
+                );
+            }
+            _ => {}
+        }
+    });
 }
 
 pub fn logout(app: &AppHandle) -> Result<GestionPrefs, String> {
