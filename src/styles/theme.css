@@ -1,13 +1,37 @@
+@import "@fontsource-variable/manrope/index.css";
+@import "@fontsource/syne/600.css";
+@import "@fontsource/syne/700.css";
+@import "@fontsource/syne/800.css";
+
 :root {
   color-scheme: light dark;
-  --bg: #f4f4f2;
-  --fg: #1a1a1a;
-  --muted: #5c5c5c;
-  --accent: #2f5d50;
-  --border: #d8d8d4;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  line-height: 1.4;
-  font-weight: 400;
+
+  /* MIND — encre forêt sur brume froide (pas cream/purple). */
+  --bg: #e8eeeb;
+  --bg-elevated: #f4f7f5;
+  --fg: #13201c;
+  --muted: #5a6b64;
+  --accent: #0f6e5c;
+  --accent-strong: #0a5749;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --border: #c3d0ca;
+  --danger: #b42318;
+  --surface: color-mix(in srgb, #ffffff 78%, var(--bg-elevated));
+  --shadow-soft: 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset,
+    0 10px 28px color-mix(in srgb, #13201c 8%, transparent);
+
+  --radius-sm: 7px;
+  --radius: 11px;
+  --radius-lg: 16px;
+  --control-radius: 9px;
+
+  --font-sans: "Manrope Variable", Manrope, "Segoe UI", sans-serif;
+  --font-display: Syne, Manrope, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+
+  font-family: var(--font-sans);
+  line-height: 1.45;
+  font-weight: 450;
   color: var(--fg);
   background: var(--bg);
   font-synthesis: none;
@@ -17,11 +41,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161616;
-    --fg: #f2f2f0;
-    --muted: #a0a0a0;
-    --accent: #7eb8a6;
-    --border: #2e2e2e;
+    --bg: #101614;
+    --bg-elevated: #17201d;
+    --fg: #e8f0ec;
+    --muted: #9aada4;
+    --accent: #4db89f;
+    --accent-strong: #6dccb5;
+    --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+    --border: #2a3833;
+    --danger: #f07167;
+    --surface: color-mix(in srgb, #1a2420 88%, #000);
+    --shadow-soft: 0 1px 0 color-mix(in srgb, #fff 4%, transparent) inset,
+      0 12px 30px color-mix(in srgb, #000 35%, transparent);
   }
 }
 
@@ -33,12 +64,29 @@ body,
 }
 
 body {
-  background: var(--bg);
   color: var(--fg);
+  background:
+    radial-gradient(
+      120% 80% at 100% 0%,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 70% at 0% 100%,
+      color-mix(in srgb, var(--accent) 8%, transparent),
+      transparent 50%
+    ),
+    linear-gradient(165deg, var(--bg-elevated) 0%, var(--bg) 48%, var(--bg) 100%);
+  background-attachment: fixed;
 }
 
 * {
   box-sizing: border-box;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--fg);
 }
 
 .shell {
@@ -50,8 +98,10 @@ body {
 
 .shell h1 {
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .shell p {
@@ -64,8 +114,31 @@ body {
   align-self: flex-start;
   border: 1px solid var(--border);
   color: var(--accent);
-  padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
-  letter-spacing: 0.02em;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  border-radius: var(--control-radius);
+  background: var(--accent-soft);
+}
+
+@keyframes mind-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mind-soft-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

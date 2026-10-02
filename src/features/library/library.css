@@ -1,39 +1,43 @@
 .library-root {
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 1.25rem 1.5rem 1.75rem;
+  padding: 1.35rem 1.6rem 1.85rem;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  background: var(--bg);
+  gap: 1.15rem;
   color: var(--fg);
+  animation: mind-fade-up 240ms ease both;
 }
 
 .library-header h1 {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 750;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
 }
 
 .library-header p {
-  margin: 0.3rem 0 0;
+  margin: 0.35rem 0 0;
   color: var(--muted);
+  font-size: 0.92rem;
+  max-width: 42ch;
 }
 
 .library-section h2 {
-  margin: 0 0 0.45rem;
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
+  margin: 0 0 0.5rem;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .library-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
+  gap: 1.15rem;
   min-height: 0;
   flex: 1 1 auto;
 }
@@ -45,6 +49,11 @@
   min-height: 280px;
   max-height: 55vh;
   overflow: auto;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-soft);
 }
 
 @media (max-width: 720px) {
