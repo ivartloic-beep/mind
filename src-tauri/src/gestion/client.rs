@@ -997,6 +997,109 @@ impl GestionClient {
         Ok((bytes, filename, mime))
     }
 
+    /// Télécharge un fichier upload générique (`download.php`) — PJ fiche tâche, etc.
+    pub async fn fetch_uploaded_file(
+        &self,
+        id: &str,
+        preferred_name: Option<&str>,
+    ) -> Result<(Vec<u8>, String, Option<String>), String> {
+        let id = id.trim();
+        if id.is_empty() {
+            return Err("id fichier manquant".into());
+        }
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("download.php");
+        let form = reqwest::multipart::Form::new()
+            .text("id", id.to_string())
+            .text("token", raw.clone());
+        let res = self
+            .http
+            .post(&url)
+            .header(AUTHORIZATION, &bearer)
+            .header("X-Auth-Token", &raw)
+            .multipart(form)
+            .timeout(std::time::Duration::from_secs(120))
+            .send()
+            .await
+            .map_err(|e| format!("réseau download: {e}"))?;
+        let status = res.status();
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée — reconnecte-toi".into());
+        }
+        if !status.is_success() {
+            // Fallback GET ?id=&auth=
+            let get_url = format!(
+                "{}?id={}&auth={}",
+                self.url("download.php"),
+                urlencoding_lite(id),
+                urlencoding_lite(&raw)
+            );
+            let res2 = self
+                .http
+                .get(&get_url)
+                .header(AUTHORIZATION, bearer)
+                .header("X-Auth-Token", &raw)
+                .timeout(std::time::Duration::from_secs(120))
+                .send()
+                .await
+                .map_err(|e| format!("réseau download GET: {e}"))?;
+            let status2 = res2.status();
+            if !status2.is_success() {
+                let text = res2.text().await.unwrap_or_default();
+                let snippet: String = text.chars().take(160).collect();
+                return Err(format!(
+                    "download HTTP {status2}{}",
+                    if snippet.is_empty() {
+                        String::new()
+                    } else {
+                        format!(": {snippet}")
+                    }
+                ));
+            }
+            return Self::read_file_response(res2, id, preferred_name).await;
+        }
+        Self::read_file_response(res, id, preferred_name).await
+    }
+
+    async fn read_file_response(
+        res: reqwest::Response,
+        id: &str,
+        preferred_name: Option<&str>,
+    ) -> Result<(Vec<u8>, String, Option<String>), String> {
+        let mime = res
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.split(';').next().unwrap_or(s).trim().to_string())
+            .filter(|s| !s.is_empty());
+        let filename = preferred_name
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                res.headers()
+                    .get(reqwest::header::CONTENT_DISPOSITION)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(filename_from_content_disposition)
+            })
+            .unwrap_or_else(|| format!("upload-{id}"));
+        let bytes = res
+            .bytes()
+            .await
+            .map_err(|e| format!("lecture fichier: {e}"))?
+            .to_vec();
+        if bytes.is_empty() {
+            return Err("Fichier vide".into());
+        }
+        if let Some(m) = mime.as_deref() {
+            if m.starts_with("text/html") || m.contains("json") {
+                let snippet: String = String::from_utf8_lossy(&bytes).chars().take(120).collect();
+                return Err(format!("réponse non-fichier: {snippet}"));
+            }
+        }
+        Ok((bytes, filename, mime))
+    }
+
     /// Upload fichier → `workspace_upload.php` (bureau personal ou projet team).
     pub async fn upload_workspace_file(
         &self,

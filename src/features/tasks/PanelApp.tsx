@@ -854,9 +854,16 @@ export function PanelApp() {
               </div>
               <p>Capturer d&apos;abord, organiser ensuite.</p>
               {gestionLoggedIn ? (
-                <p className="panel-gestion-status is-connected" title={gestionUser || undefined}>
+                <p
+                  className={`panel-gestion-status is-connected${gestionLastError ? " is-warn" : ""}`}
+                  title={
+                    gestionLastError
+                      ? gestionLastError
+                      : gestionUser || undefined
+                  }
+                >
                   Gestion · connecté{gestionUser ? ` — ${gestionUser}` : ""}
-                  {gestionLastError ? " · cache local" : ""}
+                  {gestionLastError ? " · sync à revoir" : ""}
                 </p>
               ) : (
                 <p className="panel-gestion-status">
@@ -1048,7 +1055,7 @@ export function PanelApp() {
               <section className="panel-section panel-section-grow panel-capture-mode">
                 <h2>Capturer</h2>
                 <p className="panel-muted">
-                  Choisis un type — la fenêtre Capture s’ouvre.
+                  Tâche / note / idée → Capture. CRM → Gestion. Fichier → dépôt.
                 </p>
                 <div className="panel-capture-grid" role="group" aria-label="Type">
                   <button
@@ -1084,12 +1091,13 @@ export function PanelApp() {
                   <button
                     type="button"
                     className="panel-action-btn"
+                    title="Ouvre le CRM Gestion (création contact express bientôt)"
                     onClick={() => {
                       setShowDropInCapture(false);
                       void gestionShowPage("crm");
                     }}
                   >
-                    Contact
+                    CRM
                   </button>
                   <button
                     type="button"

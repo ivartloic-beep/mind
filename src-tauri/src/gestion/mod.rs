@@ -41,6 +41,23 @@ fn set_last_error(app: &AppHandle, err: Option<String>) {
     let _ = save_prefs(app, &prefs);
 }
 
+/// Erreur réseau / session — on conserve le cache local (pas de prune).
+fn is_transient_api_error(err: &str) -> bool {
+    let e = err.to_ascii_lowercase();
+    e.contains("réseau")
+        || e.contains("reseau")
+        || e.contains("timeout")
+        || e.contains("timed out")
+        || e.contains("connection")
+        || e.contains("connect")
+        || e.contains("dns")
+        || e.contains("expir")
+        || e.contains("401")
+        || e.contains("503")
+        || e.contains("502")
+        || e.contains("500")
+}
+
 fn link_category_to_project(task: &mut Task, projects: &[Project]) {
     if task.project_id.is_some() {
         return;
@@ -131,17 +148,40 @@ pub async fn list_tasks_hybrid(
                 merged.push(task);
             }
 
-            // Gestion → panneau : si absent de personal_tasks, retirer du cache
-            // (évite de ressusciter une tâche supprimée dans Gestion).
-            // Panneau → Gestion reste assuré par create/upsert/delete.
+            // Orphelins locaux : push d’abord (captures hors-ligne), prune seulement
+            // si le push est définitivement refusé (tâche absente / supprimée côté Gestion).
             let locals = state
                 .storage
                 .list_tasks(&TaskFilter::default())
                 .map_err(|e| e.to_string())?;
+            let mut push_errs: Vec<String> = Vec::new();
             for local in locals {
-                if !remote_ids.contains(&local.id) {
-                    let _ = state.storage.delete_task(&local.id);
+                if remote_ids.contains(&local.id) {
+                    continue;
                 }
+                match client.create_task(&local).await {
+                    Ok(()) => {
+                        let _ = client.update_task(&local).await;
+                        remote_ids.insert(local.id.clone());
+                        if !merged.iter().any(|t| t.id == local.id) {
+                            merged.push(local);
+                        }
+                    }
+                    Err(err) => {
+                        if is_transient_api_error(&err) {
+                            push_errs.push(err);
+                            if !merged.iter().any(|t| t.id == local.id) {
+                                merged.push(local);
+                            }
+                        } else {
+                            // Absent de Gestion de façon définitive → retire du cache.
+                            let _ = state.storage.delete_task(&local.id);
+                        }
+                    }
+                }
+            }
+            if let Some(err) = push_errs.into_iter().next() {
+                set_last_error(app, Some(format!("Sync push tâches — {err}")));
             }
 
             Ok(apply_local_filter(merged, &filter))
@@ -212,7 +252,11 @@ pub async fn upsert_task_hybrid(
         .await;
         match api_result {
             Ok(()) => set_last_error(app, None),
-            Err(err) => set_last_error(app, Some(format!("Écriture locale — API: {err}"))),
+            Err(err) => {
+                set_last_error(app, Some(format!("Écriture locale — API: {err}")));
+                // Session active : l’UI doit voir l’échec (sinon sensation de sync OK).
+                return Err(format!("Gestion: {err}"));
+            }
         }
     }
 
@@ -228,9 +272,9 @@ pub async fn delete_task_hybrid(
     if let Some(client) = try_client(app) {
         if let Err(err) = client.delete_task(id).await {
             set_last_error(app, Some(format!("Suppression locale — API: {err}")));
-        } else {
-            set_last_error(app, None);
+            return Err(format!("Gestion: {err}"));
         }
+        set_last_error(app, None);
     }
     Ok(())
 }
@@ -374,11 +418,15 @@ pub async fn upsert_project_hybrid(
                 match client.save_work_projects(&data).await {
                     Ok(()) => set_last_error(app, None),
                     Err(err) => {
-                        set_last_error(app, Some(format!("Projet local — API: {err}")))
+                        set_last_error(app, Some(format!("Projet local — API: {err}")));
+                        return Err(format!("Gestion: {err}"));
                     }
                 }
             }
-            Err(err) => set_last_error(app, Some(format!("Projet local — API: {err}"))),
+            Err(err) => {
+                set_last_error(app, Some(format!("Projet local — API: {err}")));
+                return Err(format!("Gestion: {err}"));
+            }
         }
     }
     Ok(project)
@@ -397,11 +445,15 @@ pub async fn delete_project_hybrid(
                 match client.save_work_projects(&data).await {
                     Ok(()) => set_last_error(app, None),
                     Err(err) => {
-                        set_last_error(app, Some(format!("Suppression projet locale — API: {err}")))
+                        set_last_error(app, Some(format!("Suppression projet locale — API: {err}")));
+                        return Err(format!("Gestion: {err}"));
                     }
                 }
             }
-            Err(err) => set_last_error(app, Some(format!("Suppression projet locale — API: {err}"))),
+            Err(err) => {
+                set_last_error(app, Some(format!("Suppression projet locale — API: {err}")));
+                return Err(format!("Gestion: {err}"));
+            }
         }
     }
     Ok(())
@@ -473,15 +525,31 @@ pub async fn list_notes_hybrid(
         }
     }
 
-    // Gestion → panneau : retirer du cache ce qui n’existe plus à distance.
+    // Orphelins locaux : push puis prune seulement si refus définitif.
     let locals = state
         .storage
         .list_notes(&NoteFilter::default())
         .map_err(|e| e.to_string())?;
+    let mut push_errs: Vec<String> = Vec::new();
     for local in locals {
-        if !remote_ids.contains(&local.id) {
-            let _ = state.storage.delete_note(&local.id);
+        if remote_ids.contains(&local.id) {
+            continue;
         }
+        match client.save_workspace_element(&local).await {
+            Ok(()) => {
+                remote_ids.insert(local.id.clone());
+            }
+            Err(err) => {
+                if is_transient_api_error(&err) {
+                    push_errs.push(err);
+                } else {
+                    let _ = state.storage.delete_note(&local.id);
+                }
+            }
+        }
+    }
+    if let Some(err) = push_errs.into_iter().next() {
+        set_last_error(app, Some(format!("Sync push notes — {err}")));
     }
 
     state
@@ -519,7 +587,10 @@ pub async fn upsert_note_hybrid(
     if let Some(client) = try_client(app) {
         match client.save_workspace_element(&note).await {
             Ok(()) => set_last_error(app, None),
-            Err(err) => set_last_error(app, Some(format!("Note locale — API: {err}"))),
+            Err(err) => {
+                set_last_error(app, Some(format!("Note locale — API: {err}")));
+                return Err(format!("Gestion: {err}"));
+            }
         }
     }
     Ok(note)
@@ -558,7 +629,10 @@ pub async fn delete_note_hybrid(
     if let Some(client) = try_client(app) {
         match client.delete_workspace_element(id).await {
             Ok(()) => set_last_error(app, None),
-            Err(err) => set_last_error(app, Some(format!("Suppression note locale — API: {err}"))),
+            Err(err) => {
+                set_last_error(app, Some(format!("Suppression note locale — API: {err}")));
+                return Err(format!("Gestion: {err}"));
+            }
         }
     }
     Ok(())
@@ -626,7 +700,7 @@ pub struct SyncReport {
     pub active: bool,
 }
 
-/// Sync bidirectionnel panneau ↔ Gestion (pull API + push locaux orphelins).
+/// Sync bidirectionnel panneau ↔ Gestion (push orphelins dans list_* + pull).
 pub async fn sync_bidirectional(
     app: &AppHandle,
     state: &AppState,
@@ -639,6 +713,7 @@ pub async fn sync_bidirectional(
             active: false,
         });
     }
+    // Ordre : projets (référentiel) → tâches (push orphelins) → notes (push orphelins).
     let projects = list_projects_hybrid(app, state).await?;
     let tasks = list_tasks_hybrid(app, state, TaskFilter::default()).await?;
     let notes = list_notes_hybrid(app, state, NoteFilter::default()).await?;

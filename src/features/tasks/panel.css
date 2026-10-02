@@ -99,6 +99,10 @@
   color: color-mix(in srgb, var(--accent-strong) 85%, var(--fg));
 }
 
+.panel-gestion-status.is-connected.is-warn {
+  color: color-mix(in srgb, #b45309 70%, var(--fg));
+}
+
 .panel-settings-btn {
   appearance: none;
   border: 0;

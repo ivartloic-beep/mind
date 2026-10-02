@@ -85,6 +85,10 @@ export function ProjectsManage({ projects, onChanged }: Props) {
 
       {open && (
         <div className="projects-manage-body">
+          <p className="panel-muted">
+            Création / renommage = espaces de travail Gestion. Les projets
+            Production se gèrent dans Gestion.
+          </p>
           <div className="projects-create-row">
             <input
               className="projects-input"

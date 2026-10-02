@@ -187,6 +187,30 @@ const DOC_OPEN_PATCH: &str = r#"(function(){
         toast('❌ Téléchargement: ' + (err && err.message ? err.message : err));
       });
     };
+    // PJ fiche tâche / uploads génériques (download.php) — blob: bloqué dans WebView.
+    window.openUploadedFile = function(fileId, opts) {
+      opts = opts || {};
+      if (!fileId) { toast('❌ Fichier inaccessible'); return Promise.resolve(); }
+      var name = opts.name || opts.fileName || null;
+      var cmd = opts.download ? 'gestion_download_uploaded_file' : 'gestion_open_uploaded_file';
+      return mindInvoke(cmd, { id: String(fileId), filename: name }).catch(function(err) {
+        toast('❌ Fichier: ' + (err && err.message ? err.message : err));
+      });
+    };
+    window.openTaskFicheDocument = function(docId) {
+      try {
+        var ctx = typeof getTaskFicheContext === 'function' ? getTaskFicheContext() : null;
+        if (!ctx || !ctx.task) return;
+        var doc = (ctx.task.documents || []).find(function(d) { return String(d.id) === String(docId); });
+        if (!doc) return;
+        var fileId = typeof taskFicheGetDocFileId === 'function' ? taskFicheGetDocFileId(doc) : null;
+        if (!fileId) { toast('❌ Fichier inaccessible'); return; }
+        window.openUploadedFile(fileId, {
+          name: doc.fileName || doc.name || 'Fichier',
+          type: doc.fileType || doc.mimeType || ''
+        });
+      } catch (e) { toast('❌ Fichier: ' + e); }
+    };
   }
   patchDocFns();
   if (!window.__MIND_DOC_PATCH_TIMER__) {
@@ -198,12 +222,23 @@ const DOC_OPEN_PATCH: &str = r#"(function(){
     window.open = function(url, target, features) {
       if (!url) return null;
       var s = String(url);
-      if (s.indexOf('workspace_file.php') !== -1 || s.indexOf('/uploads/') !== -1) {
+      if (s.indexOf('blob:') === 0) {
+        toast('Aperçu bloqué dans MIND — utilise Ouvrir sur le fichier');
+        return null;
+      }
+      if (s.indexOf('workspace_file.php') !== -1 || s.indexOf('/uploads/') !== -1
+          || s.indexOf('download.php') !== -1) {
         var id = idFromUrl(s);
         var dl = s.indexOf('download=1') !== -1;
         if (id) {
-          mindInvoke(dl ? 'gestion_download_workspace_file' : 'gestion_open_workspace_file', { id: id })
-            .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+          var isUpload = s.indexOf('download.php') !== -1;
+          if (isUpload) {
+            mindInvoke(dl ? 'gestion_download_uploaded_file' : 'gestion_open_uploaded_file', { id: id })
+              .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+          } else {
+            mindInvoke(dl ? 'gestion_download_workspace_file' : 'gestion_open_workspace_file', { id: id })
+              .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+          }
           return null;
         }
         mindInvoke('open_external_url', { url: s }).catch(function(){});
@@ -259,7 +294,19 @@ const DOC_OPEN_PATCH: &str = r#"(function(){
             return;
           }
         }
-        var a = t.closest('a[href*="workspace_file.php"], a[href*="/uploads/"]');
+        var ficheBtn = t.closest('button[onclick*="openTaskFicheDocument"]');
+        if (ficheBtn) {
+          var foc = ficheBtn.getAttribute('onclick') || '';
+          var mFiche = foc.match(/openTaskFicheDocument\('([^']+)'\)/);
+          if (mFiche) {
+            ev.preventDefault();
+            if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+            else ev.stopPropagation();
+            window.openTaskFicheDocument(mFiche[1]);
+            return;
+          }
+        }
+        var a = t.closest('a[href*="workspace_file.php"], a[href*="/uploads/"], a[href*="download.php"]');
         if (a && a.href) {
           ev.preventDefault();
           if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
@@ -267,8 +314,14 @@ const DOC_OPEN_PATCH: &str = r#"(function(){
           var id = idFromUrl(a.href);
           var dl = a.href.indexOf('download=1') !== -1 || a.hasAttribute('download');
           if (id) {
-            mindInvoke(dl ? 'gestion_download_workspace_file' : 'gestion_open_workspace_file', { id: id })
-              .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+            var isUpload = a.href.indexOf('download.php') !== -1;
+            if (isUpload) {
+              mindInvoke(dl ? 'gestion_download_uploaded_file' : 'gestion_open_uploaded_file', { id: id })
+                .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+            } else {
+              mindInvoke(dl ? 'gestion_download_workspace_file' : 'gestion_open_workspace_file', { id: id })
+                .catch(function(err) { toast('❌ Fichier: ' + (err && err.message ? err.message : err)); });
+            }
           } else {
             mindInvoke('open_external_url', { url: a.href }).catch(function(){});
           }
@@ -406,6 +459,7 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
         let url_str = url.to_string();
         if url_str.contains("workspace_file.php")
             || url_str.contains("/uploads/")
+            || url_str.contains("download.php")
             || url_str.contains("download=1")
         {
             let id = url
@@ -413,16 +467,23 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
                 .find(|(k, _)| k == "id")
                 .map(|(_, v)| v.to_string());
             let download = url_str.contains("download=1");
+            let is_upload = url_str.contains("download.php");
             if let Some(id) = id {
                 let app = app_for_docs.clone();
                 tauri::async_runtime::spawn(async move {
-                    let cmd = if download {
+                    let cmd = if is_upload {
+                        if download {
+                            gestion_download_uploaded_file(app, id, None).await
+                        } else {
+                            gestion_open_uploaded_file(app, id, None).await
+                        }
+                    } else if download {
                         gestion_download_workspace_file(app, id).await
                     } else {
                         gestion_open_workspace_file(app, id).await
                     };
                     if let Err(err) = cmd {
-                        eprintln!("[mind] doc workspace: {err}");
+                        eprintln!("[mind] doc open: {err}");
                     }
                 });
             } else {
@@ -455,16 +516,22 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
             DownloadEvent::Requested { url, destination } => {
                 // Si c’est un workspace_file, on laisse le JS/IPC gérer (auth MIND).
                 let url_str = url.to_string();
-                if url_str.contains("workspace_file.php") {
+                if url_str.contains("workspace_file.php") || url_str.contains("download.php") {
                     if let Some(id) = url
                         .query_pairs()
                         .find(|(k, _)| k == "id")
                         .map(|(_, v)| v.to_string())
                     {
                         let app = app_for_docs_dl.clone();
+                        let is_upload = url_str.contains("download.php");
                         tauri::async_runtime::spawn(async move {
-                            if let Err(err) = gestion_download_workspace_file(app, id).await {
-                                eprintln!("[mind] download workspace: {err}");
+                            let res = if is_upload {
+                                gestion_download_uploaded_file(app, id, None).await
+                            } else {
+                                gestion_download_workspace_file(app, id).await
+                            };
+                            if let Err(err) = res {
+                                eprintln!("[mind] download: {err}");
                             }
                         });
                         return false; // annule le download WebView (sans session)
@@ -585,8 +652,27 @@ pub async fn gestion_open_workspace_file(app: AppHandle, id: String) -> Result<(
 #[tauri::command]
 pub async fn gestion_download_workspace_file(app: AppHandle, id: String) -> Result<(), String> {
     let (bytes, filename) = fetch_workspace_bytes(&app, &id).await?;
-    let path = downloads_dir().join(&filename);
-    // Évite d’écraser silencieusement.
+    write_downloads_and_open(&filename, &bytes)
+}
+
+async fn fetch_uploaded_bytes(
+    app: &AppHandle,
+    id: &str,
+    filename: Option<&str>,
+) -> Result<(Vec<u8>, String), String> {
+    if crate::gestion::try_client(app).is_none() {
+        let _ = gestion_ensure_session(app.clone()).await?;
+    }
+    let client = crate::gestion::try_client(app)
+        .ok_or_else(|| {
+            "Session Gestion absente — ⚙ Paramètres → Se connecter".to_string()
+        })?;
+    let (bytes, name, _mime) = client.fetch_uploaded_file(id, filename).await?;
+    Ok((bytes, name))
+}
+
+fn write_downloads_and_open(filename: &str, bytes: &[u8]) -> Result<(), String> {
+    let path = downloads_dir().join(filename);
     let path = if path.exists() {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("fichier");
         let ext = path
@@ -603,8 +689,32 @@ pub async fn gestion_download_workspace_file(app: AppHandle, id: String) -> Resu
     } else {
         path
     };
-    fs::write(&path, &bytes).map_err(|e| format!("écriture: {e}"))?;
+    fs::write(&path, bytes).map_err(|e| format!("écriture: {e}"))?;
     open::that(&path).map_err(|e| format!("ouverture: {e}"))
+}
+
+/// Ouvre une PJ upload (`download.php`) via l’OS.
+#[tauri::command]
+pub async fn gestion_open_uploaded_file(
+    app: AppHandle,
+    id: String,
+    filename: Option<String>,
+) -> Result<(), String> {
+    let (bytes, name) = fetch_uploaded_bytes(&app, &id, filename.as_deref()).await?;
+    let path = std::env::temp_dir().join(format!("mind-{}", name));
+    fs::write(&path, &bytes).map_err(|e| format!("écriture temp: {e}"))?;
+    open::that(&path).map_err(|e| format!("ouverture: {e}"))
+}
+
+/// Télécharge une PJ upload dans Téléchargements puis l’ouvre.
+#[tauri::command]
+pub async fn gestion_download_uploaded_file(
+    app: AppHandle,
+    id: String,
+    filename: Option<String>,
+) -> Result<(), String> {
+    let (bytes, name) = fetch_uploaded_bytes(&app, &id, filename.as_deref()).await?;
+    write_downloads_and_open(&name, &bytes)
 }
 
 #[derive(Debug, Clone, Serialize)]

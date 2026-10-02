@@ -120,6 +120,8 @@ pub fn run() {
             windows::gestion::open_external_url,
             windows::gestion::gestion_open_workspace_file,
             windows::gestion::gestion_download_workspace_file,
+            windows::gestion::gestion_open_uploaded_file,
+            windows::gestion::gestion_download_uploaded_file,
             windows::gestion::gestion_get_config,
             windows::gestion::gestion_set_config,
             windows::gestion::gestion_login,

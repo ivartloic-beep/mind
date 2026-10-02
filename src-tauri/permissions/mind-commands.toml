@@ -43,6 +43,8 @@ commands.allow = [
   "open_external_url",
   "gestion_open_workspace_file",
   "gestion_download_workspace_file",
+  "gestion_open_uploaded_file",
+  "gestion_download_uploaded_file",
   "gestion_get_config",
   "gestion_set_config",
   "gestion_login",
@@ -79,11 +81,14 @@ commands.allow = [
 identifier = "allow-gestion-remote-bridge"
 description = """
 Pont minimal pour le front Gestion distant (https://gestion.louetline.fr) :
-sync session + ouvrir/télécharger documents workspace.
+sync session, config API, ouvrir/télécharger documents workspace + PJ uploads.
 """
 commands.allow = [
   "gestion_set_session",
+  "gestion_set_config",
   "open_external_url",
   "gestion_open_workspace_file",
-  "gestion_download_workspace_file"
+  "gestion_download_workspace_file",
+  "gestion_open_uploaded_file",
+  "gestion_download_uploaded_file"
 ]
