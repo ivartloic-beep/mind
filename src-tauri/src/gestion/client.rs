@@ -272,8 +272,12 @@ pub fn note_title_for_workspace(note: &Note) -> String {
     }
 }
 
-/// Élément workspace bureau → Note MIND (`page`/`quicknote`/`idea` perso).
-pub fn workspace_element_to_note(value: &Value) -> Option<Note> {
+/// Élément workspace → Note MIND (`page`/`quicknote`/`idea`).
+/// `fallback_project_id` : projet du listing team si l’élément n’en porte pas.
+pub fn workspace_element_to_note(
+    value: &Value,
+    fallback_project_id: Option<&str>,
+) -> Option<Note> {
     let typ = value.get("type").and_then(|t| t.as_str())?;
     let kind = match typ {
         "page" | "quicknote" => NoteKind::Note,
@@ -291,12 +295,22 @@ pub fn workspace_element_to_note(value: &Value) -> Option<Note> {
         json_str_any(value, &["created_at", "createdAt"]).unwrap_or_else(now_iso);
     let updated_at = json_str_any(value, &["updated_at", "updatedAt"])
         .unwrap_or_else(|| created_at.clone());
+    let project_id = value
+        .get("project_id")
+        .and_then(|v| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| v.as_i64().map(|n| n.to_string()))
+                .or_else(|| v.as_u64().map(|n| n.to_string()))
+        })
+        .filter(|s| !s.is_empty())
+        .or_else(|| fallback_project_id.map(|s| s.to_string()));
     Some(Note {
         id,
         title,
         body,
         kind,
-        project_id: None,
+        project_id,
         created_at,
         updated_at,
     })
@@ -311,18 +325,31 @@ pub fn note_to_workspace_payload(note: &Note, token: &str) -> Value {
         "html": plain_to_html(&note.body),
         "attachments": [],
     });
+    let has_project = note
+        .project_id
+        .as_ref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+    // Projet assigné → notes du projet (team) ; sinon bureau (personal).
+    let visibility = if has_project { "team" } else { "personal" };
     let mut payload = serde_json::json!({
         "id": note.id,
         "type": typ,
         "title": note_title_for_workspace(note),
         "content": content.to_string(),
-        "visibility": "personal",
+        "visibility": visibility,
         "tags": "[]",
         "folder_id": null,
         "token": token,
     });
-    if matches!(note.kind, NoteKind::Idea) {
-        if let Some(obj) = payload.as_object_mut() {
+    if let Some(obj) = payload.as_object_mut() {
+        if has_project {
+            obj.insert(
+                "project_id".into(),
+                Value::String(note.project_id.clone().unwrap_or_default()),
+            );
+        }
+        if matches!(note.kind, NoteKind::Idea) {
             obj.insert("status".into(), Value::String("draft".into()));
         }
     }
@@ -761,11 +788,31 @@ impl GestionClient {
 
     /// Notes / idées du bureau (`workspace.php?visibility=personal`).
     pub async fn list_workspace_personal(&self) -> Result<Vec<Value>, String> {
+        self.list_workspace("personal", None).await
+    }
+
+    /// Notes d’un projet Gestion (`visibility=team&project_id=…`).
+    pub async fn list_workspace_for_project(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<Value>, String> {
+        self.list_workspace("team", Some(project_id)).await
+    }
+
+    async fn list_workspace(
+        &self,
+        visibility: &str,
+        project_id: Option<&str>,
+    ) -> Result<Vec<Value>, String> {
         let (bearer, raw) = self.auth_headers()?;
-        let endpoint = format!(
-            "workspace.php?visibility=personal&token={}",
+        let mut endpoint = format!(
+            "workspace.php?visibility={}&token={}",
+            urlencoding_lite(visibility),
             urlencoding_lite(&raw)
         );
+        if let Some(pid) = project_id {
+            endpoint.push_str(&format!("&project_id={}", urlencoding_lite(pid)));
+        }
         let url = self.url(&endpoint);
         let res = self
             .http

@@ -420,53 +420,74 @@ pub async fn list_notes_hybrid(
             .list_notes(&filter)
             .map_err(|e| e.to_string());
     };
-    match client.list_workspace_personal().await {
+    use std::collections::HashSet;
+
+    let personal = match client.list_workspace_personal().await {
         Ok(elements) => {
-            use std::collections::HashSet;
             set_last_error(app, None);
-            let mut remote_ids = HashSet::new();
-            for el in elements {
-                let Some(mut remote) = workspace_element_to_note(&el) else {
-                    continue;
-                };
-                remote_ids.insert(remote.id.clone());
-                if let Ok(Some(local)) = state.storage.get_note(&remote.id) {
-                    if remote.project_id.is_none() {
-                        remote.project_id = local.project_id;
-                    }
-                }
-                state
-                    .storage
-                    .upsert_note(&remote)
-                    .map_err(|e| e.to_string())?;
-            }
-
-            // Gestion → panneau : source de vérité = bureau distant.
-            // Une note créée dans MIND (UUID) puis supprimée dans Gestion
-            // ne doit PAS être re-poussée ni rester affichée.
-            let locals = state
-                .storage
-                .list_notes(&NoteFilter::default())
-                .map_err(|e| e.to_string())?;
-            for local in locals {
-                if !remote_ids.contains(&local.id) {
-                    let _ = state.storage.delete_note(&local.id);
-                }
-            }
-
-            state
-                .storage
-                .list_notes(&filter)
-                .map_err(|e| e.to_string())
+            elements
         }
         Err(err) => {
             set_last_error(app, Some(format!("Notes cache — {err}")));
-            state
+            return state
                 .storage
                 .list_notes(&filter)
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string());
+        }
+    };
+
+    let mut remote_ids = HashSet::new();
+    let mut ingest = |el: &serde_json::Value, fallback_project: Option<&str>| -> Result<(), String> {
+        let Some(mut remote) = workspace_element_to_note(el, fallback_project) else {
+            return Ok(());
+        };
+        remote_ids.insert(remote.id.clone());
+        if let Ok(Some(local)) = state.storage.get_note(&remote.id) {
+            if remote.project_id.is_none() {
+                remote.project_id = local.project_id;
+            }
+        }
+        state
+            .storage
+            .upsert_note(&remote)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    };
+
+    for el in &personal {
+        ingest(el, None)?;
+    }
+
+    // Notes rattachées aux projets Gestion (visibility=team).
+    let projects = list_projects_hybrid(app, state).await.unwrap_or_default();
+    for project in &projects {
+        match client.list_workspace_for_project(&project.id).await {
+            Ok(elements) => {
+                for el in &elements {
+                    ingest(el, Some(project.id.as_str()))?;
+                }
+            }
+            Err(_) => {
+                // Un projet sans accès notes ne bloque pas le reste.
+            }
         }
     }
+
+    // Gestion → panneau : retirer du cache ce qui n’existe plus à distance.
+    let locals = state
+        .storage
+        .list_notes(&NoteFilter::default())
+        .map_err(|e| e.to_string())?;
+    for local in locals {
+        if !remote_ids.contains(&local.id) {
+            let _ = state.storage.delete_note(&local.id);
+        }
+    }
+
+    state
+        .storage
+        .list_notes(&filter)
+        .map_err(|e| e.to_string())
 }
 
 pub async fn upsert_note_hybrid(

@@ -1,6 +1,6 @@
 /**
  * Capture rapide — création directe Task / Note / Idée.
- * Tâches : mêmes champs que Gestion (desc, priorité, échéance, statut, notes, projet).
+ * Notes : titre + contenu + projet optionnel (bureau si aucun, sinon notes projet).
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -29,6 +29,7 @@ export function CaptureApp() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [description, setDescription] = useState("");
+  const [noteBody, setNoteBody] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [status, setStatus] = useState<TaskStatus>("todo");
   const [dueDate, setDueDate] = useState("");
@@ -43,6 +44,12 @@ export function CaptureApp() {
   const busyRef = useRef(false);
   const creatingProjectRef = useRef(false);
   const interactingRef = useRef(false);
+
+  const isNoteKind = kind === "note" || kind === "idea";
+  const canSubmit =
+    kind === "task"
+      ? Boolean(text.trim())
+      : Boolean(text.trim() || noteBody.trim());
 
   async function closeCapture() {
     if (closingRef.current) return;
@@ -59,6 +66,7 @@ export function CaptureApp() {
     setKind("task");
     setProjectId(null);
     setDescription("");
+    setNoteBody("");
     setPriority("medium");
     setStatus("todo");
     setDueDate("");
@@ -155,7 +163,6 @@ export function CaptureApp() {
       unsubs.push(unOpened);
 
       const win = getCurrentWindow();
-      // Délai : select / champ projet font perdre le focus sous Windows.
       const unFocus = await win.onFocusChanged(({ payload: focused }) => {
         if (focused) {
           if (blurTimer !== null) {
@@ -204,8 +211,7 @@ export function CaptureApp() {
   }, []);
 
   async function submit() {
-    const value = text.trim();
-    if (!value || busy || creatingProject) return;
+    if (!canSubmit || busy || creatingProject) return;
     setBusy(true);
     busyRef.current = true;
     setError(null);
@@ -215,7 +221,7 @@ export function CaptureApp() {
           ? projects.find((p) => p.id === projectId)?.name
           : undefined;
         await createTask({
-          title: value,
+          title: text.trim(),
           projectId,
           description: description.trim() || null,
           category: projectName || null,
@@ -225,9 +231,17 @@ export function CaptureApp() {
           notes: notes.trim() || null,
         });
       } else {
-        await createNote(value, kind, projectId);
+        const title = text.trim();
+        const body = noteBody.trim();
+        await createNote(
+          body || title,
+          kind,
+          projectId,
+          title || null,
+        );
       }
       setText("");
+      setNoteBody("");
       setProjectId(null);
       await closeCapture();
     } catch (err) {
@@ -240,6 +254,89 @@ export function CaptureApp() {
 
   function markInteracting(on: boolean) {
     interactingRef.current = on;
+  }
+
+  function renderProjectRow() {
+    if (creatingProject) {
+      return (
+        <div className="capture-project-create">
+          <input
+            ref={projectNameRef}
+            className="capture-project-input"
+            type="text"
+            value={newProjectName}
+            disabled={busy}
+            placeholder="Nom du projet"
+            aria-label="Nom du nouveau projet"
+            onChange={(e) => setNewProjectName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                void createProjectAndSelect();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="capture-project-create-btn"
+            disabled={busy || !newProjectName.trim()}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void createProjectAndSelect()}
+          >
+            {busy ? "…" : "Créer"}
+          </button>
+          <button
+            type="button"
+            className="capture-project-cancel"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={cancelCreateProject}
+          >
+            Annuler
+          </button>
+        </div>
+      );
+    }
+    return (
+      <>
+        <div className="capture-project-row">
+          <span className="capture-project-label">Projet</span>
+          <ProjectSelect
+            projects={projects}
+            value={projectId}
+            disabled={busy}
+            onChange={setProjectId}
+            ariaLabel={
+              isNoteKind
+                ? "Projet (optionnel — sinon bureau Gestion)"
+                : "Projet Gestion (Production ou espace de travail)"
+            }
+          />
+          <button
+            type="button"
+            className="capture-project-new"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={openCreateProject}
+          >
+            + Nouveau
+          </button>
+        </div>
+        {isNoteKind && (
+          <p className="capture-hint">
+            {projectId
+              ? "Cette note ira dans les notes du projet Gestion."
+              : "Sans projet → bureau Gestion."}
+          </p>
+        )}
+        {projects.length === 0 && (
+          <p className="capture-hint">
+            Aucun projet Gestion — connecte-toi dans Paramètres, ou crée-en un.
+          </p>
+        )}
+      </>
+    );
   }
 
   return (
@@ -270,15 +367,13 @@ export function CaptureApp() {
         disabled={busy || creatingProject}
         placeholder={
           kind === "task"
-            ? "Titre de la tâche — Entrée pour créer"
-            : "Écris, puis Entrée — Échap pour fermer"
+            ? "Titre de la tâche"
+            : kind === "idea"
+              ? "Titre de l’idée"
+              : "Titre de la note"
         }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && kind !== "task") {
-            e.preventDefault();
-            void submit();
-          }
           if (e.key === "Enter" && kind === "task" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             void submit();
@@ -301,7 +396,9 @@ export function CaptureApp() {
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 setKind(value);
-                if (value !== "task") {
+                if (value === "task") {
+                  setNoteBody("");
+                } else {
                   setCreatingProject(false);
                   creatingProjectRef.current = false;
                   setNewProjectName("");
@@ -316,11 +413,11 @@ export function CaptureApp() {
         <button
           type="button"
           className="capture-submit"
-          disabled={busy || creatingProject || !text.trim()}
+          disabled={busy || creatingProject || !canSubmit}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => void submit()}
         >
-          {busy && !creatingProject ? "…" : kind === "task" ? "Créer" : "Entrée"}
+          {busy && !creatingProject ? "…" : "Créer"}
         </button>
       </div>
       {kind === "task" && (
@@ -335,71 +432,7 @@ export function CaptureApp() {
             onBlur={() => markInteracting(false)}
             onChange={(e) => setDescription(e.target.value)}
           />
-          {!creatingProject && (
-            <div className="capture-project-row">
-              <span className="capture-project-label">Projet</span>
-              <ProjectSelect
-                projects={projects}
-                value={projectId}
-                disabled={busy}
-                onChange={setProjectId}
-                ariaLabel="Projet Gestion (Production ou espace de travail)"
-              />
-              <button
-                type="button"
-                className="capture-project-new"
-                disabled={busy}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={openCreateProject}
-              >
-                + Nouveau
-              </button>
-            </div>
-          )}
-          {!creatingProject && projects.length === 0 && (
-            <p className="capture-hint">
-              Aucun projet Gestion — connecte-toi dans Paramètres, ou crée-en un.
-            </p>
-          )}
-          {creatingProject && (
-            <div className="capture-project-create">
-              <input
-                ref={projectNameRef}
-                className="capture-project-input"
-                type="text"
-                value={newProjectName}
-                disabled={busy}
-                placeholder="Nom du projet"
-                aria-label="Nom du nouveau projet"
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void createProjectAndSelect();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="capture-project-create-btn"
-                disabled={busy || !newProjectName.trim()}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => void createProjectAndSelect()}
-              >
-                {busy ? "…" : "Créer"}
-              </button>
-              <button
-                type="button"
-                className="capture-project-cancel"
-                disabled={busy}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={cancelCreateProject}
-              >
-                Annuler
-              </button>
-            </div>
-          )}
+          {renderProjectRow()}
           <div className="capture-fields">
             <label className="capture-field">
               <span>Priorité</span>
@@ -453,10 +486,25 @@ export function CaptureApp() {
           />
         </>
       )}
+      {isNoteKind && (
+        <>
+          <textarea
+            className="capture-textarea"
+            value={noteBody}
+            disabled={busy || creatingProject}
+            placeholder="Contenu"
+            rows={4}
+            onFocus={() => markInteracting(true)}
+            onBlur={() => markInteracting(false)}
+            onChange={(e) => setNoteBody(e.target.value)}
+          />
+          {renderProjectRow()}
+        </>
+      )}
       <p className="capture-hint">
         {kind === "task"
           ? "Créer ou Ctrl+Entrée — Échap pour fermer"
-          : "Échap ou ✕ pour fermer sans créer"}
+          : "Créer — Échap pour fermer sans enregistrer"}
       </p>
       {error && <p className="capture-error">{error}</p>}
     </main>
