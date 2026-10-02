@@ -16,8 +16,16 @@ foreach ($n in @("ma-tete", "Ma Tete", "mind")) {
     }
 }
 
-git pull origin main
+git fetch origin main
+if ($LASTEXITCODE -ne 0) { throw "git fetch a echoue" }
+git checkout main
+if ($LASTEXITCODE -ne 0) { throw "git checkout main a echoue" }
+git pull --ff-only origin main
 if ($LASTEXITCODE -ne 0) { throw "git pull a echoue" }
+
+$commit = (git rev-parse --short HEAD)
+$subject = (git log -1 --pretty=format:"%s")
+Write-Host ("Commit: " + $commit + " - " + $subject) -ForegroundColor Yellow
 
 npm install
 if ($LASTEXITCODE -ne 0) { throw "npm install a echoue" }
@@ -25,5 +33,6 @@ if ($LASTEXITCODE -ne 0) { throw "npm install a echoue" }
 Write-Host ""
 Write-Host "OK - code a jour. Utilise Ouvrir MIND (mode dev)." -ForegroundColor Green
 Write-Host "Dans l'app: engrenage Parametres -> Configurer -> Token API." -ForegroundColor Cyan
+Write-Host "Attendu apres cette MAJ: plus de fleche en haut a droite ; Ctrl+Alt+B = bibliotheque." -ForegroundColor Cyan
 Write-Host "Appuie sur une touche pour fermer..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
