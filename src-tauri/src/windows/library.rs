@@ -25,6 +25,7 @@ fn ensure_library(app: &AppHandle) -> Result<WebviewWindow, String> {
 
 #[tauri::command]
 pub fn library_show(app: AppHandle) -> Result<(), String> {
+    crate::windows::capture::release_capture_overlay(&app);
     let window = ensure_library(&app)?;
     let _ = window.unminimize();
     window.show().map_err(|e| e.to_string())?;

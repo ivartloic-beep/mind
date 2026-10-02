@@ -44,7 +44,7 @@
         "resizable": false,
         "decorations": false,
         "skipTaskbar": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "focus": false,
         "center": true
       },

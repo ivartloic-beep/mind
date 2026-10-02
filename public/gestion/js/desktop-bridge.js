@@ -90,18 +90,51 @@
       "position:fixed;z-index:99999;left:0;right:0;top:0;padding:10px 14px;background:#0f6e5c;color:#fff;font:14px/1.4 Manrope,Segoe UI,sans-serif;display:flex;gap:8px;align-items:center;flex-wrap:wrap;",
     );
     bar.innerHTML =
-      '<span style="flex:1 1 auto">Configure l’URL de l’API gestion (PHP), ex. https://ton-domaine/api</span>' +
-      '<input id="mindApiInput" type="url" placeholder="https://…/api" style="flex:1 1 16rem;min-width:12rem;padding:6px 8px;border:0;border-radius:8px;" />' +
+      '<span style="flex:1 1 auto">Configure l’URL API dans le <b>panneau MIND</b> (⚙ Paramètres → Gestion), puis recharge. Ou colle-la ici :</span>' +
+      '<input id="mindApiInput" type="url" placeholder="https://…/api" style="flex:1 1 16rem;min-width:12rem;padding:6px 8px;border:0;border-radius:8px;pointer-events:auto;" tabindex="1" />' +
       '<button id="mindApiSave" type="button" style="padding:6px 12px;border:0;border-radius:8px;background:#fff;color:#0f6e5c;font-weight:700;cursor:pointer">Enregistrer</button>';
-    document.documentElement.appendChild(bar);
-    document.body && (document.body.style.paddingTop = "52px");
+    document.body.appendChild(bar);
+    document.body.style.paddingTop = "52px";
+    // Forcer le focus clavier dans la WebView au clic.
+    bar.addEventListener(
+      "mousedown",
+      function () {
+        try {
+          window.focus();
+        } catch (e) {
+          /* ignore */
+        }
+      },
+      true,
+    );
     document.getElementById("mindApiSave").onclick = function () {
       var v = (document.getElementById("mindApiInput").value || "").trim().replace(/\/$/, "");
       if (!v) return;
       localStorage.setItem("mind_gestion_api_url", v);
       window.API_URL = v;
-      location.reload();
+      tauriInvoke("gestion_set_config", { apiUrl: v }).finally(function () {
+        location.reload();
+      });
     };
+  }
+
+  function ensureLoginInputsWork() {
+    document.addEventListener(
+      "mousedown",
+      function (ev) {
+        var t = ev.target;
+        if (!t) return;
+        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) {
+          try {
+            window.focus();
+            t.focus();
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      },
+      true,
+    );
   }
 
   function tauriInvoke(cmd, args) {
@@ -170,12 +203,18 @@
     hideMailAndMessaging();
     renameEvenementielToProduction();
     showApiBannerIfNeeded();
+    ensureLoginInputsWork();
     watchAuthStorage();
     syncSessionToMind();
-    // Re-apply after SPA nav paints pages
-    var obs = new MutationObserver(function () {
-      hideMailAndMessaging();
-      renameEvenementielToProduction();
+    // Re-apply after SPA nav paints pages (pas de subtree text — évite de rompre la saisie)
+    var obs = new MutationObserver(function (mutations) {
+      for (var i = 0; i < mutations.length; i++) {
+        if (mutations[i].type === "childList" && mutations[i].addedNodes.length) {
+          hideMailAndMessaging();
+          renameEvenementielToProduction();
+          break;
+        }
+      }
     });
     if (document.body) {
       obs.observe(document.body, { childList: true, subtree: true });

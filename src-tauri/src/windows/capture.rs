@@ -44,18 +44,26 @@ fn center_on_monitor(window: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
-/// Prépare la fenêtre (cachée, always-on-top, légère) au démarrage.
+/// Prépare la fenêtre (cachée, légère) au démarrage.
+/// `always_on_top` seulement à l’ouverture — sinon une capture invisible vole les clics
+/// des autres fenêtres (ex. champs login Gestion sur Windows).
 pub fn init_capture(app: &AppHandle) -> Result<(), String> {
     let window = capture_window(app)?;
     let _ = window.set_decorations(false);
     let _ = window.set_resizable(false);
     let _ = window.set_skip_taskbar(true);
-    window
-        .set_always_on_top(true)
-        .map_err(|e| e.to_string())?;
+    let _ = window.set_always_on_top(false);
     center_on_monitor(&window)?;
     let _ = window.hide();
     Ok(())
+}
+
+/// À appeler avant d’ouvrir Gestion / Library : neutralise la capture cachée.
+pub fn release_capture_overlay(app: &AppHandle) {
+    if let Ok(window) = capture_window(app) {
+        let _ = window.set_always_on_top(false);
+        let _ = window.hide();
+    }
 }
 
 #[tauri::command]
@@ -86,6 +94,7 @@ pub fn capture_show_kind(app: AppHandle, kind: Option<String>) -> Result<(), Str
 #[tauri::command]
 pub fn capture_hide(app: AppHandle) -> Result<(), String> {
     let window = capture_window(&app)?;
+    let _ = window.set_always_on_top(false);
     window.hide().map_err(|e| e.to_string())?;
     Ok(())
 }

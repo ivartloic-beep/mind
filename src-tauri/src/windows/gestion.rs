@@ -127,18 +127,24 @@ fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
 
 /// Ouvre / focus la fenêtre Gestion et injecte l’URL API + session.
 pub fn show_gestion(app: &AppHandle) -> Result<(), String> {
+    // Empêche la capture always-on-top invisible de bloquer clavier/souris.
+    crate::windows::capture::release_capture_overlay(app);
+
     let prefs = load_prefs(app);
     let window = ensure_window(app)?;
     inject_prefs(&window, &prefs);
     let _ = window.unminimize();
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
-    // Ré-injecte après chargement (localStorage prêt).
+    // Ré-injecte après chargement (localStorage prêt) + re-focus WebView.
     let prefs2 = prefs.clone();
     let win = window.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(400));
         inject_prefs(&win, &prefs2);
+        let _ = win.set_focus();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let _ = win.set_focus();
     });
     Ok(())
 }
