@@ -1,17 +1,21 @@
-//! Fenêtre shell Gestion (front embarqué `public/gestion/` → API PHP distante).
+//! Fenêtre shell Gestion — charge le front en ligne (ex. https://gestion.louetline.fr)
+//! et pointe l’API PHP (`…/api`) pour MIND / personal_tasks.
 
 use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use url::Url;
 
 pub const GESTION_LABEL: &str = "gestion";
+/// Défaut Loïc / louetline — overridable via prefs.
+pub const DEFAULT_API_URL: &str = "https://gestion.louetline.fr/api";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GestionPrefs {
-    /// URL absolue de l’API PHP, ex. https://exemple.fr/api
+    /// URL absolue de l’API PHP, ex. https://gestion.louetline.fr/api
     pub api_url: String,
     /// Token session gestion (login.php).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -31,7 +35,7 @@ pub struct GestionPrefs {
 impl Default for GestionPrefs {
     fn default() -> Self {
         Self {
-            api_url: String::new(),
+            api_url: DEFAULT_API_URL.to_string(),
             auth_token: None,
             user_id: None,
             user_name: None,
@@ -49,6 +53,12 @@ impl GestionPrefs {
             .unwrap_or(false)
             && !self.api_url.trim().is_empty()
     }
+
+    pub fn ensure_api_url(&mut self) {
+        if self.api_url.trim().is_empty() {
+            self.api_url = DEFAULT_API_URL.to_string();
+        }
+    }
 }
 
 fn prefs_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -61,10 +71,12 @@ pub fn load_prefs(app: &AppHandle) -> GestionPrefs {
     let Ok(path) = prefs_path(app) else {
         return GestionPrefs::default();
     };
-    fs::read_to_string(path)
+    let mut prefs: GestionPrefs = fs::read_to_string(path)
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    prefs.ensure_api_url();
+    prefs
 }
 
 pub fn save_prefs(app: &AppHandle, prefs: &GestionPrefs) -> Result<(), String> {
@@ -73,43 +85,99 @@ pub fn save_prefs(app: &AppHandle, prefs: &GestionPrefs) -> Result<(), String> {
     fs::write(path, raw).map_err(|e| e.to_string())
 }
 
-fn inject_prefs(window: &WebviewWindow, prefs: &GestionPrefs) {
-    let api_url = prefs.api_url.trim();
-    if api_url.is_empty() && prefs.auth_token.is_none() {
-        return;
+/// `https://gestion.louetline.fr/api` → `https://gestion.louetline.fr/`
+pub fn front_url_from_api(api_url: &str) -> String {
+    let trimmed = api_url.trim().trim_end_matches('/');
+    let base = trimmed
+        .strip_suffix("/api")
+        .unwrap_or(trimmed)
+        .trim_end_matches('/');
+    if base.is_empty() {
+        "https://gestion.louetline.fr".into()
+    } else {
+        base.to_string()
     }
-    let escaped_url = api_url.replace('\\', "\\\\").replace('\'', "\\'");
+}
+
+fn release_input_blockers(app: &AppHandle) {
+    crate::windows::capture::release_capture_overlay(app);
+    // Panneau / post-its always-on-top peuvent aussi voler clics/clavier.
+    if let Some(panel) = app.get_webview_window(crate::windows::panel::PANEL_LABEL) {
+        let _ = panel.set_always_on_top(false);
+    }
+    for (label, window) in app.webview_windows() {
+        if label.starts_with(crate::windows::postit::LABEL_PREFIX) {
+            let _ = window.set_always_on_top(false);
+        }
+    }
+}
+
+fn inject_session_bridge(window: &WebviewWindow, prefs: &GestionPrefs) {
     let token = prefs.auth_token.clone().unwrap_or_default();
     let escaped_token = token.replace('\\', "\\\\").replace('\'', "\\'");
+    let api = prefs.api_url.replace('\\', "\\\\").replace('\'', "\\'");
     let js = format!(
         r#"(function(){{
   try {{
-    if ('{url}') {{
-      localStorage.setItem('mind_gestion_api_url', '{url}');
-      window.API_URL = '{url}';
-      window.__MIND_GESTION_API_URL__ = '{url}';
+    if ('{api}') {{
+      try {{ localStorage.setItem('mind_gestion_api_url', '{api}'); }} catch (e) {{}}
+      window.__MIND_GESTION_API_URL__ = '{api}';
     }}
     if ('{token}') {{
-      localStorage.setItem('authToken', '{token}');
-      window.authToken = '{token}';
+      try {{
+        localStorage.setItem('authToken', '{token}');
+        window.authToken = '{token}';
+      }} catch (e) {{}}
     }}
+    if (window.__MIND_SESSION_BRIDGE__) return;
+    window.__MIND_SESSION_BRIDGE__ = true;
+    var last = '';
+    setInterval(function(){{
+      try {{
+        var t = localStorage.getItem('authToken') || '';
+        var u = localStorage.getItem('currentUser') || '';
+        var cur = t + '|' + u;
+        if (cur === last) return;
+        last = cur;
+        var userId = null, userName = null;
+        if (u) {{
+          try {{
+            var o = JSON.parse(u);
+            if (o && o.id != null) userId = Number(o.id);
+            if (o) userName = ((o.prenom||'')+' '+(o.nom||'')).trim() || o.username || null;
+          }} catch (e2) {{}}
+        }}
+        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {{
+          window.__TAURI__.core.invoke('gestion_set_session', {{
+            token: t, userId: userId, userName: userName
+          }});
+        }}
+      }} catch (e) {{}}
+    }}, 1500);
   }} catch (e) {{}}
 }})();"#,
-        url = escaped_url,
+        api = api,
         token = escaped_token
     );
     let _ = window.eval(&js);
 }
 
-fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+fn parse_front_url(api_url: &str) -> Result<Url, String> {
+    let front = front_url_from_api(api_url);
+    Url::parse(&front).map_err(|e| e.to_string())
+}
+
+fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> {
     if let Some(existing) = app.get_webview_window(GESTION_LABEL) {
+        // Navigue vers le front distant (évite le shell local embarqué qui bloque la saisie).
+        let _ = existing.navigate(front.clone());
         return Ok(existing);
     }
 
     let window = WebviewWindowBuilder::new(
         app,
         GESTION_LABEL,
-        WebviewUrl::App("gestion/index.html".into()),
+        WebviewUrl::External(front.clone()),
     )
     .title("MIND — Gestion")
     .inner_size(1280.0, 840.0)
@@ -117,6 +185,7 @@ fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     .resizable(true)
     .decorations(true)
     .skip_taskbar(false)
+    .focused(true)
     .center()
     .visible(false)
     .build()
@@ -125,32 +194,39 @@ fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     Ok(window)
 }
 
-/// Ouvre / focus la fenêtre Gestion et injecte l’URL API + session.
+/// Ouvre / focus la fenêtre Gestion (front distant) et synchronise la session.
 pub fn show_gestion(app: &AppHandle) -> Result<(), String> {
-    // Empêche la capture always-on-top invisible de bloquer clavier/souris.
-    crate::windows::capture::release_capture_overlay(app);
+    release_input_blockers(app);
 
-    let prefs = load_prefs(app);
-    let window = ensure_window(app)?;
-    inject_prefs(&window, &prefs);
+    let mut prefs = load_prefs(app);
+    prefs.ensure_api_url();
+    save_prefs(app, &prefs)?;
+
+    let front = parse_front_url(&prefs.api_url)?;
+    let window = ensure_window(app, &front)?;
+    inject_session_bridge(&window, &prefs);
     let _ = window.unminimize();
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
-    // Ré-injecte après chargement (localStorage prêt) + re-focus WebView.
+
     let prefs2 = prefs.clone();
     let win = window.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(400));
-        inject_prefs(&win, &prefs2);
-        let _ = win.set_focus();
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        let _ = win.set_focus();
+        for delay in [300u64, 800, 1600] {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            inject_session_bridge(&win, &prefs2);
+            let _ = win.set_focus();
+        }
     });
     Ok(())
 }
 
 pub fn init_gestion(app: &AppHandle, background: bool) -> Result<(), String> {
-    let _ = ensure_window(app)?;
+    let mut prefs = load_prefs(app);
+    prefs.ensure_api_url();
+    let _ = save_prefs(app, &prefs);
+    let front = parse_front_url(&prefs.api_url)?;
+    let _ = ensure_window(app, &front)?;
     if !background {
         show_gestion(app)?;
     }
@@ -171,9 +247,13 @@ pub fn gestion_get_config(app: AppHandle) -> Result<GestionPrefs, String> {
 pub fn gestion_set_config(app: AppHandle, api_url: String) -> Result<GestionPrefs, String> {
     let mut prefs = load_prefs(&app);
     prefs.api_url = api_url.trim().trim_end_matches('/').to_string();
+    prefs.ensure_api_url();
     save_prefs(&app, &prefs)?;
     if let Some(window) = app.get_webview_window(GESTION_LABEL) {
-        inject_prefs(&window, &prefs);
+        if let Ok(front) = parse_front_url(&prefs.api_url) {
+            let _ = window.navigate(front);
+        }
+        inject_session_bridge(&window, &prefs);
     }
     Ok(prefs)
 }
@@ -186,7 +266,7 @@ pub async fn gestion_login(
 ) -> Result<GestionPrefs, String> {
     let prefs = crate::gestion::login(&app, username, password).await?;
     if let Some(window) = app.get_webview_window(GESTION_LABEL) {
-        inject_prefs(&window, &prefs);
+        inject_session_bridge(&window, &prefs);
     }
     Ok(prefs)
 }
@@ -196,7 +276,7 @@ pub fn gestion_logout(app: AppHandle) -> Result<GestionPrefs, String> {
     let prefs = crate::gestion::logout(&app)?;
     if let Some(window) = app.get_webview_window(GESTION_LABEL) {
         let _ = window.eval(
-            r#"(function(){try{localStorage.removeItem('authToken');window.authToken=null;}catch(e){}})();"#,
+            r#"(function(){try{localStorage.removeItem('authToken');localStorage.removeItem('currentUser');window.authToken=null;}catch(e){}})();"#,
         );
     }
     Ok(prefs)
@@ -213,7 +293,9 @@ pub fn gestion_set_session(
 }
 
 #[tauri::command]
-pub async fn gestion_migrate_local_tasks(app: AppHandle) -> Result<crate::gestion::MigrateReport, String> {
+pub async fn gestion_migrate_local_tasks(
+    app: AppHandle,
+) -> Result<crate::gestion::MigrateReport, String> {
     let state = app.state::<crate::state::AppState>();
     crate::gestion::migrate_local_tasks(&app, &state).await
 }

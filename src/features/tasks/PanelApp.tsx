@@ -165,7 +165,7 @@ export function PanelApp() {
         if (!cancelled) setShortcuts(keys);
         const g = await gestionGetConfig();
         if (!cancelled) {
-          setGestionApiUrl(g.apiUrl || "");
+          setGestionApiUrl(g.apiUrl || "https://gestion.louetline.fr/api");
           setGestionLoggedIn(isGestionLoggedIn(g));
           setGestionUser(g.userName || null);
           setGestionMigratedAt(g.tasksMigratedAt || null);
@@ -575,7 +575,7 @@ export function PanelApp() {
                   className="panel-input"
                   value={gestionApiUrl}
                   disabled={gestionBusy}
-                  placeholder="https://exemple.fr/api"
+                  placeholder="https://gestion.louetline.fr/api"
                   autoComplete="off"
                   onChange={(e) => setGestionApiUrl(e.target.value)}
                 />
