@@ -238,6 +238,46 @@ pub fn gestion_show(app: AppHandle) -> Result<(), String> {
     show_gestion(&app)
 }
 
+/// Ouvre Gestion sur la fiche tâche (documents, notes, activités… comme le bureau).
+#[tauri::command]
+pub fn gestion_show_task(app: AppHandle, task_id: String) -> Result<(), String> {
+    let task_id = task_id.trim().to_string();
+    if task_id.is_empty() {
+        return Err("task_id vide".into());
+    }
+    show_gestion(&app)?;
+    let window = app
+        .get_webview_window(GESTION_LABEL)
+        .ok_or_else(|| "fenêtre Gestion introuvable".to_string())?;
+    let escaped = task_id.replace('\\', "\\\\").replace('\'', "\\'");
+    let js = format!(
+        r#"(function(){{
+  var id = '{id}';
+  function tryOpen(n) {{
+    try {{
+      if (typeof openTaskFiche === 'function') {{
+        Promise.resolve(openTaskFiche('personal', '', id)).catch(function(){{}});
+        return;
+      }}
+    }} catch (e) {{}}
+    if (n < 48) setTimeout(function(){{ tryOpen(n + 1); }}, 250);
+  }}
+  tryOpen(0);
+}})();"#,
+        id = escaped
+    );
+    let win = window.clone();
+    let js2 = js.clone();
+    let _ = window.eval(&js);
+    std::thread::spawn(move || {
+        for delay in [400u64, 1000, 2000, 3500] {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            let _ = win.eval(&js2);
+        }
+    });
+    Ok(())
+}
+
 #[tauri::command]
 pub fn gestion_get_config(app: AppHandle) -> Result<GestionPrefs, String> {
     Ok(load_prefs(&app))

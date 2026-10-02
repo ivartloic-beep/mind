@@ -14,6 +14,7 @@ import {
   upsertTask,
 } from "../../services/api";
 import { listenDataChanged } from "../../services/events";
+import { gestionShowTask } from "../../services/gestion";
 import type { Note, Project, Task } from "../../types/models";
 import { isTaskDone, isTaskOpen } from "../../types/models";
 import { NotesPanel } from "../notes/NotesPanel";
@@ -301,6 +302,7 @@ export function LibraryApp() {
                 void assignTaskReminder(task, fireAt)
               }
               onClearReminder={(task) => void removeTaskReminder(task)}
+              onOpenTask={(task) => void gestionShowTask(task.id)}
               pendingId={pendingId}
             />
           )}

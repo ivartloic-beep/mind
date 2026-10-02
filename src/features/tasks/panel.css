@@ -869,6 +869,130 @@
   min-width: 0;
 }
 
+.panel-recent-item.is-task {
+  align-items: flex-start;
+  padding: 0.4rem 0;
+}
+
+.panel-recent-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.panel-recent-title-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.panel-recent-title-btn:hover:not(:disabled) {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.panel-recent-title-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.panel-recent-attrs,
+.task-attrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.task-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  padding: 0.12rem 0.38rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-chip.status.is-todo {
+  color: color-mix(in srgb, var(--fg) 75%, var(--muted));
+}
+
+.task-chip.status.is-progress {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
+}
+
+.task-chip.status.is-done {
+  opacity: 0.75;
+}
+
+.task-chip.priority.is-high {
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318 40%, var(--border));
+  background: color-mix(in srgb, #b42318 10%, transparent);
+}
+
+.task-chip.priority.is-medium {
+  color: color-mix(in srgb, var(--accent-strong) 90%, var(--fg));
+}
+
+.task-chip.priority.is-low {
+  opacity: 0.85;
+}
+
+.task-chip.due,
+.task-chip.docs {
+  color: var(--fg);
+}
+
+.task-title-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-title-btn:hover:not(:disabled) {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.task-title-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .panel-recent-check,
 .panel-recent-bell {
   appearance: none;

@@ -36,9 +36,17 @@ import {
   gestionMigrateLocalTasks,
   gestionSetConfig,
   gestionShow,
+  gestionShowTask,
   gestionSyncNow,
   isGestionLoggedIn,
 } from "../../services/gestion";
+import {
+  formatTaskDue,
+  formatTaskPriority,
+  formatTaskStatus,
+  priorityClass,
+  statusClass,
+} from "./taskLabels";
 import { libraryShow } from "../../services/library";
 import {
   panelGetState,
@@ -436,7 +444,7 @@ export function PanelApp() {
     setReminderBusy(true);
     try {
       await openTaskFromReminder(dueReminder.taskId);
-      await libraryShow();
+      await gestionShowTask(dueReminder.taskId);
     } finally {
       setReminderBusy(false);
     }
@@ -961,47 +969,81 @@ export function PanelApp() {
                     <p className="panel-muted">Aucune tâche active.</p>
                   ) : (
                     <ul className="panel-recent-list">
-                      {tasks.map((task) => (
-                        <li
-                          key={task.id}
-                          className="panel-recent-item"
-                          data-task-id={task.id}
-                        >
-                          <button
-                            type="button"
-                            className="panel-recent-check"
-                            disabled={pendingId === task.id}
-                            aria-label="Terminer"
-                            onClick={() => void toggleTaskDone(task)}
+                      {tasks.map((task) => {
+                        const prio = formatTaskPriority(task.priority);
+                        const due = formatTaskDue(task.dueDate);
+                        return (
+                          <li
+                            key={task.id}
+                            className="panel-recent-item is-task"
+                            data-task-id={task.id}
                           >
-                            ○
-                          </button>
-                          <span className="panel-recent-title">{task.title}</span>
-                          <button
-                            type="button"
-                            className={`panel-recent-bell ${task.reminder ? "has-reminder" : ""}`}
-                            disabled={pendingId === task.id}
-                            title={
-                              task.reminder
-                                ? "Retirer le rappel"
-                                : "Rappel +10 min"
-                            }
-                            onClick={() => void quickRemind(task)}
-                          >
-                            🔔
-                          </button>
-                          <button
-                            type="button"
-                            className="item-delete-btn"
-                            disabled={pendingId === task.id}
-                            aria-label="Supprimer la tâche"
-                            title="Supprimer"
-                            onClick={() => void removeTask(task)}
-                          >
-                            ×
-                          </button>
-                        </li>
-                      ))}
+                            <button
+                              type="button"
+                              className="panel-recent-check"
+                              disabled={pendingId === task.id}
+                              aria-label="Terminer"
+                              onClick={() => void toggleTaskDone(task)}
+                            >
+                              ○
+                            </button>
+                            <div className="panel-recent-main">
+                              <button
+                                type="button"
+                                className="panel-recent-title-btn"
+                                disabled={pendingId === task.id}
+                                title="Ouvrir la fiche Gestion"
+                                onClick={() => void gestionShowTask(task.id)}
+                              >
+                                {task.title}
+                              </button>
+                              <div className="panel-recent-attrs" aria-label="Attributs">
+                                <span
+                                  className={`task-chip status ${statusClass(task.status)}`}
+                                >
+                                  {formatTaskStatus(task.status)}
+                                </span>
+                                {prio && (
+                                  <span
+                                    className={`task-chip priority ${priorityClass(task.priority)}`}
+                                  >
+                                    {prio}
+                                  </span>
+                                )}
+                                {due && <span className="task-chip due">{due}</span>}
+                                {task.category?.trim() ? (
+                                  <span className="task-chip category">
+                                    {task.category.trim()}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className={`panel-recent-bell ${task.reminder ? "has-reminder" : ""}`}
+                              disabled={pendingId === task.id}
+                              title={
+                                task.reminder
+                                  ? "Retirer le rappel"
+                                  : "Rappel +10 min"
+                              }
+                              onClick={() => void quickRemind(task)}
+                            >
+                              🔔
+                            </button>
+                            <button
+                              type="button"
+                              className="item-delete-btn"
+                              disabled={pendingId === task.id}
+                              aria-label="Supprimer la tâche"
+                              title="Supprimer"
+                              onClick={() => void removeTask(task)}
+                            >
+                              ×
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
 

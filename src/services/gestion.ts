@@ -24,6 +24,11 @@ export function gestionShow(): Promise<void> {
   return invoke("gestion_show");
 }
 
+/** Ouvre la fiche tâche Gestion (docs, notes, activités). */
+export function gestionShowTask(taskId: string): Promise<void> {
+  return invoke("gestion_show_task", { taskId });
+}
+
 export function gestionGetConfig(): Promise<GestionConfig> {
   return invoke<GestionConfig>("gestion_get_config");
 }

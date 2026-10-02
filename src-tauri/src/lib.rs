@@ -114,6 +114,7 @@ pub fn run() {
             windows::capture::capture_hide,
             windows::library::library_show,
             windows::gestion::gestion_show,
+            windows::gestion::gestion_show_task,
             windows::gestion::gestion_get_config,
             windows::gestion::gestion_set_config,
             windows::gestion::gestion_login,
