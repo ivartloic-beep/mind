@@ -1,5 +1,5 @@
 /**
- * Post-it autonome — pensée immédiate, croix = suppression.
+ * Post-it autonome sans cadre Windows — drag + croix = suppression.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -86,8 +86,6 @@ export function PostItApp() {
           }, 280);
         };
 
-        // Fermeture native : pas de preventDefault / destroy IPC (évite le deadlock CloseRequested).
-        // La suppression DB est gérée côté Rust (on_window_event).
         unsubs.push(await win.onMoved(persistGeo));
         unsubs.push(await win.onResized(persistGeo));
       } catch {
@@ -136,17 +134,28 @@ export function PostItApp() {
     }
   }
 
+  async function closePostit() {
+    try {
+      await getCurrentWindow().close();
+    } catch {
+      /* hors Tauri */
+    }
+  }
+
   if (error && !postit) {
     return (
       <main className="postit-root">
         <p className="postit-error">{error}</p>
+        <button type="button" className="postit-close" onClick={() => void closePostit()}>
+          ×
+        </button>
       </main>
     );
   }
 
   return (
     <main className="postit-root">
-      <header className="postit-header">
+      <header className="postit-header" data-tauri-drag-region>
         <input
           className="postit-title"
           value={title}
@@ -157,7 +166,7 @@ export function PostItApp() {
             scheduleSave(next, body);
           }}
         />
-        <label className="postit-aot">
+        <label className="postit-aot" title="Toujours au-dessus">
           <input
             type="checkbox"
             checked={postit?.alwaysOnTop ?? true}
@@ -166,12 +175,21 @@ export function PostItApp() {
           <span>Top</span>
         </label>
         {saving && <span className="postit-saving">…</span>}
+        <button
+          type="button"
+          className="postit-close"
+          aria-label="Fermer et supprimer"
+          title="Fermer (supprime le post-it)"
+          onClick={() => void closePostit()}
+        >
+          ×
+        </button>
       </header>
 
       <textarea
         className="postit-body postit-body-full"
         value={body}
-        placeholder="Note rapide — la croix supprime ce post-it"
+        placeholder="Note rapide…"
         autoFocus
         onChange={(e) => {
           const next = e.target.value;

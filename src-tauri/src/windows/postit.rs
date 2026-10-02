@@ -45,6 +45,8 @@ fn cascade_offset(app: &AppHandle) -> f64 {
 fn ensure_window(app: &AppHandle, postit: &PostIt) -> Result<WebviewWindow, String> {
     let label = label_for(&postit.id);
     if let Some(existing) = app.get_webview_window(&label) {
+        let _ = existing.set_decorations(false);
+        let _ = existing.set_shadow(true);
         existing
             .set_always_on_top(postit.always_on_top)
             .map_err(|e| e.to_string())?;
@@ -70,15 +72,17 @@ fn ensure_window(app: &AppHandle, postit: &PostIt) -> Result<WebviewWindow, Stri
         .inner_size(postit.w.max(200.0), postit.h.max(160.0))
         .position(postit.x, postit.y)
         .resizable(true)
-        .minimizable(true)
+        .minimizable(false)
         .maximizable(false)
         .closable(true)
-        .decorations(true)
+        .decorations(false)
+        .transparent(true)
         .always_on_top(postit.always_on_top)
-        .skip_taskbar(false)
+        .skip_taskbar(true)
         .visible(true)
         .build()
         .map_err(|e| e.to_string())?;
+    let _ = window.set_shadow(true);
     window.set_focus().map_err(|e| e.to_string())?;
     Ok(window)
 }
