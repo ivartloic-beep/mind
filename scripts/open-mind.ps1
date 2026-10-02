@@ -1,4 +1,4 @@
-# Ouvrir MIND — mode dev par defaut (code a jour), sinon exe si npm absent.
+# Ouvrir MIND — toujours le code Git via desktop:dev (pas l'ancien exe).
 $ErrorActionPreference = "Continue"
 
 function Wait-Key {
@@ -30,60 +30,31 @@ if (-not (Test-Path (Join-Path $Root "package.json"))) {
 }
 Set-Location -LiteralPath $Root
 
-function Find-MindExecutable {
-    $names = @("ma-tete.exe", "Ma Tete.exe", "mind.exe")
-    $roots = @(
-        (Join-Path $Root "src-tauri\target\release"),
-        (Join-Path $env:LOCALAPPDATA "Programs"),
-        (Join-Path $env:LOCALAPPDATA "com.matete.desktop")
-    )
-
-    foreach ($name in $names) {
-        foreach ($base in $roots) {
-            if (-not (Test-Path $base)) { continue }
-            $direct = Join-Path $base $name
-            if (Test-Path $direct) { return $direct }
-            try {
-                $hit = Get-ChildItem -Path $base -Filter $name -Recurse -ErrorAction SilentlyContinue |
-                    Select-Object -First 1
-                if ($hit) { return $hit.FullName }
-            } catch {
-            }
-        }
-    }
-    return $null
-}
-
-function Start-MindDev {
-    $npm = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $npm) { return $false }
-    $devScript = Join-Path $Root "scripts\open-mind-dev.ps1"
-    if (-not (Test-Path $devScript)) { return $false }
-    Write-Host "Lancement mode dev (code Git a jour)..." -ForegroundColor Cyan
-    Start-Process -FilePath "powershell.exe" -ArgumentList @(
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-NoExit",
-        "-File", $devScript
-    )
-    return $true
-}
-
-# Preferer le mode dev tant que l'installateur final n'est pas le flux quotidien.
-if (Start-MindDev) {
-    Start-Sleep -Seconds 2
-    exit 0
-}
-
-$exe = Find-MindExecutable
-if ($exe) {
-    Write-Host "Lancement exe: $exe" -ForegroundColor Cyan
-    try {
-        Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe -Parent)
-        exit 0
-    } catch {
-        Fail ("Impossible de lancer l exe: " + $_.Exception.Message)
+# Couper les anciennes instances (exe ou tauri) qui affichent l'ancienne UI.
+$names = @("ma-tete", "Ma Tete", "Ma Tête", "mind")
+foreach ($n in $names) {
+    Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
+        Write-Host ("Arret process: " + $_.ProcessName + " PID " + $_.Id) -ForegroundColor Yellow
+        Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     }
 }
 
-Fail "npm introuvable et aucun exe. Installe Node.js 20+ ou build l'exe."
+$npm = Get-Command npm -ErrorAction SilentlyContinue
+if (-not $npm) {
+    Fail "npm introuvable. Installe Node.js 20+."
+}
+
+$devScript = Join-Path $Root "scripts\open-mind-dev.ps1"
+if (-not (Test-Path $devScript)) {
+    Fail ("Script manquant: " + $devScript + " — fais git pull origin main")
+}
+
+Write-Host "Lancement MIND (code Git a jour, desktop:dev)..." -ForegroundColor Cyan
+Write-Host ("Dossier: " + $Root)
+Start-Process -FilePath "powershell.exe" -ArgumentList @(
+    "-NoProfile",
+    "-ExecutionPolicy", "Bypass",
+    "-NoExit",
+    "-File", $devScript
+)
+Start-Sleep -Seconds 2

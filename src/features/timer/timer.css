@@ -90,14 +90,14 @@
 }
 
 .timer-finish-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.25rem;
-  background: color-mix(in srgb, var(--bg) 35%, rgba(20, 22, 28, 0.72));
+  background: rgba(20, 22, 28, 0.72);
   backdrop-filter: blur(2px);
 }
 

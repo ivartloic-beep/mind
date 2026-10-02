@@ -1,16 +1,16 @@
 /**
  * Minuteur compact — durée/son/boutons sur une ligne ;
- * fin : overlay panneau + OK / Reporter.
+ * fin : panneau ouvert + écran grisé OK / Reporter.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { listen } from "@tauri-apps/api/event";
 import {
   isPermissionGranted,
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { panelSetOpen } from "../../services/panel";
 import "./timer.css";
 
 type Status = "idle" | "running" | "paused" | "finished";
@@ -105,6 +105,14 @@ async function notifyDone() {
   }
 }
 
+async function revealPanel() {
+  try {
+    await panelSetOpen(true);
+  } catch {
+    /* hors Tauri */
+  }
+}
+
 export function TimerPanel() {
   const initial = useMemo(() => loadPrefs(), []);
   const [minutes, setMinutes] = useState(initial.minutes);
@@ -114,7 +122,6 @@ export function TimerPanel() {
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customMinutes, setCustomMinutes] = useState(10);
-  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const soundRef = useRef(soundEnabled);
   const statusRef = useRef(status);
   const remainingRef = useRef(remaining);
@@ -125,11 +132,6 @@ export function TimerPanel() {
   useEffect(() => {
     savePrefs({ minutes, soundEnabled });
   }, [minutes, soundEnabled]);
-
-  useEffect(() => {
-    const el = document.querySelector(".panel-body");
-    setPortalHost(el instanceof HTMLElement ? el : null);
-  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -167,6 +169,7 @@ export function TimerPanel() {
           setStatus("finished");
           setSnoozeOpen(false);
           setCustomOpen(false);
+          void revealPanel();
           void notifyDone();
           if (soundRef.current) playBeep();
           return 0;
@@ -175,6 +178,12 @@ export function TimerPanel() {
       });
     }, 1000);
     return () => window.clearInterval(id);
+  }, [status]);
+
+  useEffect(() => {
+    if (status === "finished") {
+      void revealPanel();
+    }
   }, [status]);
 
   function applyMinutes(value: number) {
@@ -223,93 +232,6 @@ export function TimerPanel() {
     setCustomOpen(false);
     setStatus("running");
   }
-
-  const finishOverlay =
-    status === "finished" && portalHost
-      ? createPortal(
-          <div className="timer-finish-overlay" role="alertdialog" aria-modal="true">
-            <div className="timer-finish-card">
-              <p className="timer-finish-title">Fin du minuteur</p>
-              {!snoozeOpen ? (
-                <div className="timer-finish-actions">
-                  <button
-                    type="button"
-                    className="timer-btn is-primary"
-                    onClick={acknowledgeFinished}
-                  >
-                    OK
-                  </button>
-                  <button
-                    type="button"
-                    className="timer-btn"
-                    onClick={() => {
-                      setSnoozeOpen(true);
-                      setCustomOpen(false);
-                    }}
-                  >
-                    Reporter
-                  </button>
-                </div>
-              ) : (
-                <div className="timer-snooze">
-                  <p className="timer-snooze-label">Reporter de</p>
-                  <div className="timer-snooze-presets">
-                    {SNOOZE_PRESETS.map((p) => (
-                      <button
-                        key={p.minutes}
-                        type="button"
-                        className="timer-btn"
-                        onClick={() => snoozeMinutes(p.minutes)}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      className={`timer-btn ${customOpen ? "is-primary" : ""}`}
-                      onClick={() => setCustomOpen((v) => !v)}
-                    >
-                      Perso…
-                    </button>
-                  </div>
-                  {customOpen && (
-                    <div className="timer-snooze-custom">
-                      <input
-                        type="number"
-                        min={1}
-                        max={180}
-                        value={customMinutes}
-                        onChange={(e) =>
-                          setCustomMinutes(clampMinutes(Number(e.target.value)))
-                        }
-                      />
-                      <span>min</span>
-                      <button
-                        type="button"
-                        className="timer-btn is-primary"
-                        onClick={() => snoozeMinutes(customMinutes)}
-                      >
-                        OK
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    className="timer-link"
-                    onClick={() => {
-                      setSnoozeOpen(false);
-                      setCustomOpen(false);
-                    }}
-                  >
-                    Retour
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>,
-          portalHost,
-        )
-      : null;
 
   return (
     <>
@@ -382,7 +304,89 @@ export function TimerPanel() {
           </label>
         </div>
       </div>
-      {finishOverlay}
+
+      {status === "finished" && (
+        <div className="timer-finish-overlay" role="alertdialog" aria-modal="true">
+          <div className="timer-finish-card">
+            <p className="timer-finish-title">Fin du minuteur</p>
+            {!snoozeOpen ? (
+              <div className="timer-finish-actions">
+                <button
+                  type="button"
+                  className="timer-btn is-primary"
+                  onClick={acknowledgeFinished}
+                >
+                  OK
+                </button>
+                <button
+                  type="button"
+                  className="timer-btn"
+                  onClick={() => {
+                    setSnoozeOpen(true);
+                    setCustomOpen(false);
+                  }}
+                >
+                  Reporter
+                </button>
+              </div>
+            ) : (
+              <div className="timer-snooze">
+                <p className="timer-snooze-label">Reporter de</p>
+                <div className="timer-snooze-presets">
+                  {SNOOZE_PRESETS.map((p) => (
+                    <button
+                      key={p.minutes}
+                      type="button"
+                      className="timer-btn"
+                      onClick={() => snoozeMinutes(p.minutes)}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`timer-btn ${customOpen ? "is-primary" : ""}`}
+                    onClick={() => setCustomOpen((v) => !v)}
+                  >
+                    Perso…
+                  </button>
+                </div>
+                {customOpen && (
+                  <div className="timer-snooze-custom">
+                    <input
+                      type="number"
+                      min={1}
+                      max={180}
+                      value={customMinutes}
+                      onChange={(e) =>
+                        setCustomMinutes(clampMinutes(Number(e.target.value)))
+                      }
+                    />
+                    <span>min</span>
+                    <button
+                      type="button"
+                      className="timer-btn is-primary"
+                      onClick={() => snoozeMinutes(customMinutes)}
+                    >
+                      OK
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="timer-link"
+                  onClick={() => {
+                    setSnoozeOpen(false);
+                    setCustomOpen(false);
+                  }}
+                >
+                  Retour
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
