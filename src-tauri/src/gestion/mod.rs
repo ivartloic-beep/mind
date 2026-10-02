@@ -27,6 +27,12 @@ pub fn tasks_backend_active(app: &AppHandle) -> bool {
     try_client(app).is_some()
 }
 
+fn set_last_error(app: &AppHandle, err: Option<String>) {
+    let mut prefs = load_prefs(app);
+    prefs.last_error = err;
+    let _ = save_prefs(app, &prefs);
+}
+
 /// Convertit une tâche API gestion → modèle MIND, en préservant reminder/project locaux.
 pub fn merge_remote_with_local(remote: Task, local: Option<&Task>) -> Task {
     let mut task = remote;
@@ -81,16 +87,24 @@ pub async fn list_tasks_hybrid(
         return state.storage.list_tasks(&filter).map_err(|e| e.to_string());
     };
 
-    let remote = client.list_tasks(None).await?;
-    let mut merged = Vec::with_capacity(remote.len());
-    for r in remote {
-        let local = state.storage.get_task(&r.id).map_err(|e| e.to_string())?;
-        let task = merge_remote_with_local(r, local.as_ref());
-        // Cache local (préserve reminder via merge).
-        state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
-        merged.push(task);
+    match client.list_tasks(None).await {
+        Ok(remote) => {
+            set_last_error(app, None);
+            let mut merged = Vec::with_capacity(remote.len());
+            for r in remote {
+                let local = state.storage.get_task(&r.id).map_err(|e| e.to_string())?;
+                let task = merge_remote_with_local(r, local.as_ref());
+                state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
+                merged.push(task);
+            }
+            Ok(apply_local_filter(merged, &filter))
+        }
+        Err(err) => {
+            // Hors-ligne : servir le cache SQLite.
+            set_last_error(app, Some(format!("Cache local — {err}")));
+            state.storage.list_tasks(&filter).map_err(|e| e.to_string())
+        }
     }
-    Ok(apply_local_filter(merged, &filter))
 }
 
 pub async fn get_task_hybrid(
@@ -120,36 +134,41 @@ pub async fn upsert_task_hybrid(
     task.updated_at = now;
     task.normalize();
 
-    if let Some(client) = try_client(app) {
-        // Preserve local-only fields around the API round-trip.
-        let local = state
-            .storage
-            .get_task(&task.id)
-            .map_err(|e| e.to_string())?;
-        if task.reminder.is_none() {
-            task.reminder = local.as_ref().and_then(|t| t.reminder.clone());
-        }
+    // Toujours persister en local (cache / hors-ligne).
+    let local = state
+        .storage
+        .get_task(&task.id)
+        .map_err(|e| e.to_string())?;
+    if task.reminder.is_none() {
+        task.reminder = local.as_ref().and_then(|t| t.reminder.clone());
+    }
+    state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
 
-        // PUT si connue, sinon POST (+ PUT pour statut / notes).
-        match client.update_task(&task).await {
-            Ok(()) => {}
-            Err(_) => {
-                client.create_task(&task).await?;
-                if task.status != TaskStatus::Todo
-                    || task.completed
-                    || !task.notes.is_empty()
-                    || !task.documents.is_empty()
-                    || !task.activities.is_empty()
-                {
-                    client.update_task(&task).await?;
+    if let Some(client) = try_client(app) {
+        let api_result: Result<(), String> = async {
+            match client.update_task(&task).await {
+                Ok(()) => Ok(()),
+                Err(_) => {
+                    client.create_task(&task).await?;
+                    if task.status != TaskStatus::Todo
+                        || task.completed
+                        || !task.notes.is_empty()
+                        || !task.documents.is_empty()
+                        || !task.activities.is_empty()
+                    {
+                        client.update_task(&task).await?;
+                    }
+                    Ok(())
                 }
             }
         }
-        state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
-        return Ok(task);
+        .await;
+        match api_result {
+            Ok(()) => set_last_error(app, None),
+            Err(err) => set_last_error(app, Some(format!("Écriture locale — API: {err}"))),
+        }
     }
 
-    state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
     Ok(task)
 }
 
@@ -158,10 +177,14 @@ pub async fn delete_task_hybrid(
     state: &AppState,
     id: &str,
 ) -> Result<(), String> {
-    if let Some(client) = try_client(app) {
-        let _ = client.delete_task(id).await;
-    }
     state.storage.delete_task(id).map_err(|e| e.to_string())?;
+    if let Some(client) = try_client(app) {
+        if let Err(err) = client.delete_task(id).await {
+            set_last_error(app, Some(format!("Suppression locale — API: {err}")));
+        } else {
+            set_last_error(app, None);
+        }
+    }
     Ok(())
 }
 

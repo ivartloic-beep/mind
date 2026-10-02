@@ -28,9 +28,9 @@
 - Import one-shot : bouton « Importer tâches locales ».
 - Fiche tâche riche (docs / activités / assignation) via UI Gestion.
 
-### Phase 3 — Durcissement
+### Phase 3 — Durcissement (en cours)
 
-- Offline / sync ciblée si besoin.
+- Cache SQLite si l’API `personal_tasks` est injoignable (lecture + écriture locale, `lastError` en prefs).
 - Réécriture React **par module** seulement si le WebView limite (Bureau, Production…).
 
 ## Config

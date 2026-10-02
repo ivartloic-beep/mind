@@ -110,6 +110,7 @@ export function PanelApp() {
   const [gestionMigratedAt, setGestionMigratedAt] = useState<string | null>(
     null,
   );
+  const [gestionLastError, setGestionLastError] = useState<string | null>(null);
   const [gestionUserName, setGestionUserName] = useState("");
   const [gestionPassword, setGestionPassword] = useState("");
   const [gestionBusy, setGestionBusy] = useState(false);
@@ -127,6 +128,14 @@ export function PanelApp() {
     setNotes(sortRecentNotes(noteRows));
     setLoadState("ready");
     setLoadError(null);
+    try {
+      const g = await gestionGetConfig();
+      setGestionLastError(g.lastError || null);
+      setGestionLoggedIn(isGestionLoggedIn(g));
+      setGestionUser(g.userName || null);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -160,6 +169,7 @@ export function PanelApp() {
           setGestionLoggedIn(isGestionLoggedIn(g));
           setGestionUser(g.userName || null);
           setGestionMigratedAt(g.tasksMigratedAt || null);
+          setGestionLastError(g.lastError || null);
         }
       } catch {
         /* ignore */
@@ -680,6 +690,9 @@ export function PanelApp() {
                       Dernier import :{" "}
                       {new Date(gestionMigratedAt).toLocaleString()}
                     </p>
+                  )}
+                  {gestionLastError && (
+                    <p className="panel-error">{gestionLastError}</p>
                   )}
                 </>
               ) : (

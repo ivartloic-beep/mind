@@ -23,6 +23,9 @@ pub struct GestionPrefs {
     /// Horodatage du dernier import one-shot SQLite → personal_tasks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tasks_migrated_at: Option<String>,
+    /// Dernière erreur API (mode cache / hors-ligne).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
 }
 
 impl Default for GestionPrefs {
@@ -33,6 +36,7 @@ impl Default for GestionPrefs {
             user_id: None,
             user_name: None,
             tasks_migrated_at: None,
+            last_error: None,
         }
     }
 }

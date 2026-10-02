@@ -10,6 +10,7 @@ export type GestionConfig = {
   userId?: number | null;
   userName?: string | null;
   tasksMigratedAt?: string | null;
+  lastError?: string | null;
 };
 
 export type GestionMigrateReport = {
