@@ -769,6 +769,54 @@
   flex: 0 0 auto;
 }
 
+.item-delete-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.05rem 0.25rem;
+  flex: 0 0 auto;
+  opacity: 0.45;
+  border-radius: 4px;
+}
+
+.item-delete-btn:hover:not(:disabled) {
+  opacity: 1;
+  color: #b42318;
+  background: color-mix(in srgb, #b42318 10%, transparent);
+}
+
+.item-delete-btn:disabled {
+  opacity: 0.25;
+  cursor: wait;
+}
+
+.notes-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.notes-list-row .notes-item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notes-list-row .item-delete-btn {
+  align-self: center;
+}
+
+.notes-delete-btn {
+  margin-left: auto;
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318 35%, var(--border));
+}
+
 .panel-recent-bell.has-reminder {
   color: var(--accent);
   opacity: 1;

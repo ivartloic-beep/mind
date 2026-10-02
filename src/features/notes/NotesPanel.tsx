@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createNote, upsertNote } from "../../services/api";
+import { createNote, deleteNote, upsertNote } from "../../services/api";
 import type { Note, Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 
@@ -18,6 +18,7 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   const selected = notes.find((n) => n.id === selectedId) ?? null;
@@ -94,6 +95,26 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
     }
   }
 
+  async function remove(note: Note) {
+    if (deletingId || saving) return;
+    const label = note.title?.trim() || preview(note.body);
+    const ok = window.confirm(`Supprimer la note « ${label} » ?`);
+    if (!ok) return;
+    setDeletingId(note.id);
+    setSaveError(null);
+    try {
+      await deleteNote(note.id);
+      if (selectedId === note.id) {
+        setSelectedId(null);
+        setCreating(false);
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Suppression impossible");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const editing = creating || selected !== null;
 
   return (
@@ -119,11 +140,13 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
             const projectName = note.projectId
               ? projects.find((p) => p.id === note.projectId)?.name
               : null;
+            const busy = deletingId === note.id;
             return (
-              <li key={note.id}>
+              <li key={note.id} className="notes-list-row">
                 <button
                   type="button"
                   className="notes-item"
+                  disabled={busy}
                   onClick={() => {
                     setCreating(false);
                     setSelectedId(note.id);
@@ -139,6 +162,16 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
                   {note.title?.trim() ? (
                     <span className="notes-item-preview">{preview(note.body)}</span>
                   ) : null}
+                </button>
+                <button
+                  type="button"
+                  className="item-delete-btn"
+                  disabled={busy}
+                  aria-label="Supprimer la note"
+                  title="Supprimer"
+                  onClick={() => void remove(note)}
+                >
+                  ×
                 </button>
               </li>
             );
@@ -178,7 +211,7 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
             <button
               type="button"
               className="notes-save-btn"
-              disabled={saving || !draftBody.trim()}
+              disabled={saving || deletingId !== null || !draftBody.trim()}
               onClick={() => void save()}
             >
               {saving ? "…" : "Enregistrer"}
@@ -186,11 +219,21 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
             <button
               type="button"
               className="notes-cancel-btn"
-              disabled={saving}
+              disabled={saving || deletingId !== null}
               onClick={cancelEdit}
             >
               {creating ? "Annuler" : "Fermer"}
             </button>
+            {!creating && selected && (
+              <button
+                type="button"
+                className="notes-cancel-btn notes-delete-btn"
+                disabled={saving || deletingId !== null}
+                onClick={() => void remove(selected)}
+              >
+                {deletingId === selected.id ? "…" : "Supprimer"}
+              </button>
+            )}
           </div>
           {saveError && <p className="panel-error">{saveError}</p>}
         </div>

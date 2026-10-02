@@ -7,6 +7,8 @@ import {
   autostartIsEnabled,
   autostartSetEnabled,
   clearTaskReminder,
+  deleteNote,
+  deleteTask,
   dismissReminder,
   listNotes,
   listProjects,
@@ -323,6 +325,31 @@ export function PanelApp() {
     }
   }
 
+  async function removeTask(task: Task) {
+    const ok = window.confirm(`Supprimer la tâche « ${task.title} » ?`);
+    if (!ok) return;
+    setPendingId(task.id);
+    try {
+      await deleteTask(task.id);
+      await refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function removeNote(note: Note) {
+    const label = note.title?.trim() || preview(note.body);
+    const ok = window.confirm(`Supprimer la note « ${label} » ?`);
+    if (!ok) return;
+    setPendingId(note.id);
+    try {
+      await deleteNote(note.id);
+      await refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function handleOpenDue() {
     if (!dueReminder) return;
     setReminderBusy(true);
@@ -599,6 +626,16 @@ export function PanelApp() {
                           >
                             🔔
                           </button>
+                          <button
+                            type="button"
+                            className="item-delete-btn"
+                            disabled={pendingId === task.id}
+                            aria-label="Supprimer la tâche"
+                            title="Supprimer"
+                            onClick={() => void removeTask(task)}
+                          >
+                            ×
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -617,6 +654,16 @@ export function PanelApp() {
                           <span className="panel-recent-title">
                             {note.title?.trim() || preview(note.body)}
                           </span>
+                          <button
+                            type="button"
+                            className="item-delete-btn"
+                            disabled={pendingId === note.id}
+                            aria-label="Supprimer la note"
+                            title="Supprimer"
+                            onClick={() => void removeNote(note)}
+                          >
+                            ×
+                          </button>
                         </li>
                       ))}
                     </ul>

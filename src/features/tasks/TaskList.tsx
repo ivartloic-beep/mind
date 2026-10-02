@@ -15,6 +15,7 @@ type Props = {
   showDone: boolean;
   onToggleShowDone: () => void;
   onToggleDone: (task: Task) => void;
+  onDelete: (task: Task) => void;
   onAssignProject: (task: Task, projectId: string | null) => void;
   onSetReminder: (task: Task, fireAt: string) => void;
   onClearReminder: (task: Task) => void;
@@ -29,6 +30,7 @@ export function TaskList({
   showDone,
   onToggleShowDone,
   onToggleDone,
+  onDelete,
   onAssignProject,
   onSetReminder,
   onClearReminder,
@@ -49,6 +51,7 @@ export function TaskList({
               pending={pendingId === task.id}
               focused={focusedTaskId === task.id}
               onToggle={() => onToggleDone(task)}
+              onDelete={() => onDelete(task)}
               onAssignProject={(projectId) => onAssignProject(task, projectId)}
               onSetReminder={(fireAt) => onSetReminder(task, fireAt)}
               onClearReminder={() => onClearReminder(task)}
@@ -81,6 +84,7 @@ export function TaskList({
                   pending={pendingId === task.id}
                   focused={focusedTaskId === task.id}
                   onToggle={() => onToggleDone(task)}
+                  onDelete={() => onDelete(task)}
                   onAssignProject={(projectId) => onAssignProject(task, projectId)}
                   onSetReminder={(fireAt) => onSetReminder(task, fireAt)}
                   onClearReminder={() => onClearReminder(task)}
@@ -100,6 +104,7 @@ function TaskRow({
   pending,
   focused,
   onToggle,
+  onDelete,
   onAssignProject,
   onSetReminder,
   onClearReminder,
@@ -109,6 +114,7 @@ function TaskRow({
   pending: boolean;
   focused: boolean;
   onToggle: () => void;
+  onDelete: () => void;
   onAssignProject: (projectId: string | null) => void;
   onSetReminder: (fireAt: string) => void;
   onClearReminder: () => void;
@@ -152,6 +158,16 @@ function TaskRow({
             onClick={() => setMenuOpen((v) => !v)}
           >
             🔔
+          </button>
+          <button
+            type="button"
+            className="item-delete-btn"
+            disabled={pending}
+            aria-label="Supprimer la tâche"
+            title="Supprimer"
+            onClick={onDelete}
+          >
+            ×
           </button>
         </div>
         <div className="task-meta-row">

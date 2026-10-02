@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
   clearTaskReminder,
+  deleteTask,
   listNotes,
   listProjects,
   listTasks,
@@ -215,6 +216,21 @@ export function LibraryApp() {
     }
   }
 
+  async function removeTask(task: Task) {
+    const ok = window.confirm(`Supprimer la tâche « ${task.title} » ?`);
+    if (!ok) return;
+    const previous = tasks;
+    setPendingId(task.id);
+    setTasks((rows) => rows.filter((row) => row.id !== task.id));
+    try {
+      await deleteTask(task.id);
+    } catch {
+      setTasks(previous);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   const activeTasks = tasks.filter((t) => t.status === "active");
   const doneTasks = tasks.filter((t) => t.status === "done");
 
@@ -249,6 +265,7 @@ export function LibraryApp() {
               showDone={showDone}
               onToggleShowDone={() => setShowDone((v) => !v)}
               onToggleDone={(task) => void toggleTaskDone(task)}
+              onDelete={(task) => void removeTask(task)}
               onAssignProject={(task, projectId) =>
                 void assignTaskProject(task, projectId)
               }
