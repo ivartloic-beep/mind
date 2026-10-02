@@ -4,8 +4,9 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::domain::{
     new_id, now_iso, DataChangedPayload, Note, NoteFilter, NoteKind, PostIt, PostItFilter, Project,
-    Reminder, ReminderFilter, Task, TaskFilter, TaskStatus,
+    Reminder, ReminderFilter, Task, TaskFilter,
 };
+use crate::gestion;
 use crate::state::AppState;
 use crate::storage::{Storage, StorageError};
 use crate::sync;
@@ -62,97 +63,73 @@ pub fn delete_project(app: AppHandle, state: State<'_, AppState>, id: String) ->
     Ok(())
 }
 
-// --- Tasks ---
+// --- Tasks (SQLite local, ou personal_tasks si session Gestion) ---
 
 #[tauri::command]
-pub fn list_tasks(
+pub async fn list_tasks(
+    app: AppHandle,
     state: State<'_, AppState>,
     filter: Option<TaskFilter>,
 ) -> Result<Vec<Task>, String> {
-    state
-        .storage
-        .list_tasks(&filter.unwrap_or_default())
-        .map_err(map_err)
+    gestion::list_tasks_hybrid(&app, &state, filter.unwrap_or_default()).await
 }
 
 #[tauri::command]
-pub fn get_task(state: State<'_, AppState>, id: String) -> Result<Option<Task>, String> {
-    state.storage.get_task(&id).map_err(map_err)
-}
-
-#[tauri::command]
-pub fn upsert_task(
+pub async fn get_task(
     app: AppHandle,
     state: State<'_, AppState>,
-    mut task: Task,
+    id: String,
+) -> Result<Option<Task>, String> {
+    gestion::get_task_hybrid(&app, &state, &id).await
+}
+
+#[tauri::command]
+pub async fn upsert_task(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    task: Task,
 ) -> Result<Task, String> {
-    let now = now_iso();
-    if task.id.is_empty() {
-        task.id = new_id();
-    }
-    if task.created_at.is_empty() {
-        task.created_at = now.clone();
-    }
-    task.updated_at = now;
-    state.storage.upsert_task(&task).map_err(map_err)?;
+    let task = gestion::upsert_task_hybrid(&app, &state, task).await?;
     emit_changed(&app, "task", &task.id)?;
     Ok(task)
 }
 
 #[tauri::command]
-pub fn delete_task(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
-    state.storage.delete_task(&id).map_err(map_err)?;
-    sync::schedule_remote_delete(&app, "tasks", id.clone());
+pub async fn delete_task(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    gestion::delete_task_hybrid(&app, &state, &id).await?;
+    if !gestion::tasks_backend_active(&app) {
+        sync::schedule_remote_delete(&app, "tasks", id.clone());
+    }
     emit_changed(&app, "task", &id)?;
     Ok(())
 }
 
 /// Capture rapide → création directe d'une Task (pas d'InboxItem).
 #[tauri::command]
-pub fn create_task(
+pub async fn create_task(
     app: AppHandle,
     state: State<'_, AppState>,
     title: String,
     project_id: Option<String>,
 ) -> Result<Task, String> {
-    let now = now_iso();
-    let task = Task {
-        id: new_id(),
-        title,
-        status: TaskStatus::Active,
-        project_id,
-        created_at: now.clone(),
-        updated_at: now,
-        due_date: None,
-        reminder: None,
-        priority: None,
-        notes: None,
-    };
-    state.storage.upsert_task(&task).map_err(map_err)?;
+    let task = gestion::create_task_hybrid(&app, &state, title, project_id).await?;
     emit_changed(&app, "task", &task.id)?;
     Ok(task)
 }
 
 /// Coche / décoche immédiate depuis le panneau.
 #[tauri::command]
-pub fn set_task_done(
+pub async fn set_task_done(
     app: AppHandle,
     state: State<'_, AppState>,
     id: String,
     done: bool,
 ) -> Result<Task, String> {
-    let mut task = state
-        .storage
-        .get_task(&id)
-        .map_err(map_err)?
-        .ok_or_else(|| format!("task not found: {id}"))?;
-    task.status = if done {
-        TaskStatus::Done
-    } else {
-        TaskStatus::Active
-    };
-    task.updated_at = now_iso();
-    state.storage.upsert_task(&task).map_err(map_err)?;
+    let task = gestion::set_task_done_hybrid(&app, &state, &id, done).await?;
     emit_changed(&app, "task", &task.id)?;
     Ok(task)
 }

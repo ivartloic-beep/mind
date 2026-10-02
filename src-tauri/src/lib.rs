@@ -1,5 +1,6 @@
 mod commands;
 mod domain;
+mod gestion;
 mod os;
 mod state;
 mod storage;
@@ -115,6 +116,11 @@ pub fn run() {
             windows::gestion::gestion_show,
             windows::gestion::gestion_get_config,
             windows::gestion::gestion_set_config,
+            windows::gestion::gestion_login,
+            windows::gestion::gestion_logout,
+            windows::gestion::gestion_set_session,
+            windows::gestion::gestion_migrate_local_tasks,
+            windows::gestion::gestion_tasks_backend_active,
             windows::postit::create_scratch_postit,
             windows::postit::postit_open_for_note,
             windows::postit::postit_close,

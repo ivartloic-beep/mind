@@ -30,8 +30,12 @@ import {
 } from "../../services/events";
 import {
   gestionGetConfig,
+  gestionLogin,
+  gestionLogout,
+  gestionMigrateLocalTasks,
   gestionSetConfig,
   gestionShow,
+  isGestionLoggedIn,
 } from "../../services/gestion";
 import { libraryShow } from "../../services/library";
 import {
@@ -56,6 +60,7 @@ import {
   setPanelOpen as storeSetOpen,
 } from "../../stores/ui-store";
 import type { Note, Task } from "../../types/models";
+import { isTaskOpen } from "../../types/models";
 import { ReminderDueBanner } from "../reminders/ReminderDueBanner";
 import { TimerPanel } from "../timer/TimerPanel";
 import "./panel.css";
@@ -64,7 +69,7 @@ type LoadState = "loading" | "ready" | "error";
 
 function sortRecentTasks(rows: Task[]): Task[] {
   return [...rows]
-    .filter((t) => t.status === "active")
+    .filter((t) => isTaskOpen(t))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, 5);
 }
@@ -100,6 +105,13 @@ export function PanelApp() {
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [shortcuts, setShortcuts] = useState<ShortcutInfo[]>([]);
   const [gestionApiUrl, setGestionApiUrl] = useState("");
+  const [gestionUser, setGestionUser] = useState<string | null>(null);
+  const [gestionLoggedIn, setGestionLoggedIn] = useState(false);
+  const [gestionMigratedAt, setGestionMigratedAt] = useState<string | null>(
+    null,
+  );
+  const [gestionUserName, setGestionUserName] = useState("");
+  const [gestionPassword, setGestionPassword] = useState("");
   const [gestionBusy, setGestionBusy] = useState(false);
   const [gestionMsg, setGestionMsg] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -143,7 +155,12 @@ export function PanelApp() {
         const keys = await listShortcuts();
         if (!cancelled) setShortcuts(keys);
         const g = await gestionGetConfig();
-        if (!cancelled) setGestionApiUrl(g.apiUrl || "");
+        if (!cancelled) {
+          setGestionApiUrl(g.apiUrl || "");
+          setGestionLoggedIn(isGestionLoggedIn(g));
+          setGestionUser(g.userName || null);
+          setGestionMigratedAt(g.tasksMigratedAt || null);
+        }
       } catch {
         /* ignore */
       }
@@ -323,7 +340,7 @@ export function PanelApp() {
   async function toggleTaskDone(task: Task) {
     setPendingId(task.id);
     try {
-      await setTaskDone(task.id, task.status !== "done");
+      await setTaskDone(task.id, isTaskOpen(task));
       await refresh();
     } finally {
       setPendingId(null);
@@ -539,7 +556,7 @@ export function PanelApp() {
                 <h3>Gestion (app complète)</h3>
               </div>
               <p className="panel-muted">
-                URL de l’API PHP gestion-v2 (sans slash final).
+                URL API + session : les tâches MIND utilisent alors personal_tasks.
               </p>
               <label className="panel-field">
                 <span>API Gestion</span>
@@ -565,6 +582,7 @@ export function PanelApp() {
                       try {
                         const cfg = await gestionSetConfig(gestionApiUrl.trim());
                         setGestionApiUrl(cfg.apiUrl);
+                        setGestionLoggedIn(isGestionLoggedIn(cfg));
                         setGestionMsg("API Gestion enregistrée");
                       } catch (err) {
                         setGestionMsg(
@@ -589,6 +607,150 @@ export function PanelApp() {
                   Ouvrir Gestion
                 </button>
               </div>
+              {gestionLoggedIn ? (
+                <>
+                  <p className="panel-muted">
+                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Tâches =
+                    personal_tasks.
+                  </p>
+                  <div className="panel-actions">
+                    <button
+                      type="button"
+                      className="panel-action-btn"
+                      disabled={gestionBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setGestionBusy(true);
+                          setGestionMsg(null);
+                          try {
+                            const report = await gestionMigrateLocalTasks();
+                            setGestionMigratedAt(report.migratedAt || null);
+                            setGestionMsg(
+                              `Import : ${report.created} créées, ${report.skipped} déjà présentes` +
+                                (report.errors.length
+                                  ? ` (${report.errors.length} erreurs)`
+                                  : ""),
+                            );
+                            await refresh();
+                          } catch (err) {
+                            setGestionMsg(
+                              err instanceof Error
+                                ? err.message
+                                : "Migration impossible",
+                            );
+                          } finally {
+                            setGestionBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      Importer tâches locales
+                    </button>
+                    <button
+                      type="button"
+                      className="panel-action-btn"
+                      disabled={gestionBusy}
+                      onClick={() => {
+                        void (async () => {
+                          setGestionBusy(true);
+                          try {
+                            const cfg = await gestionLogout();
+                            setGestionLoggedIn(false);
+                            setGestionUser(null);
+                            setGestionMigratedAt(cfg.tasksMigratedAt || null);
+                            setGestionMsg("Session Gestion fermée");
+                            await refresh();
+                          } catch (err) {
+                            setGestionMsg(
+                              err instanceof Error
+                                ? err.message
+                                : "Déconnexion impossible",
+                            );
+                          } finally {
+                            setGestionBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      Déconnexion
+                    </button>
+                  </div>
+                  {gestionMigratedAt && (
+                    <p className="panel-muted">
+                      Dernier import :{" "}
+                      {new Date(gestionMigratedAt).toLocaleString()}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <label className="panel-field">
+                    <span>Identifiant</span>
+                    <input
+                      type="text"
+                      className="panel-input"
+                      value={gestionUserName}
+                      disabled={gestionBusy}
+                      autoComplete="username"
+                      onChange={(e) => setGestionUserName(e.target.value)}
+                    />
+                  </label>
+                  <label className="panel-field">
+                    <span>Mot de passe</span>
+                    <input
+                      type="password"
+                      className="panel-input"
+                      value={gestionPassword}
+                      disabled={gestionBusy}
+                      autoComplete="current-password"
+                      onChange={(e) => setGestionPassword(e.target.value)}
+                    />
+                  </label>
+                  <div className="panel-actions">
+                    <button
+                      type="button"
+                      className="panel-action-btn is-primary"
+                      disabled={
+                        gestionBusy ||
+                        !gestionApiUrl.trim() ||
+                        !gestionUserName.trim() ||
+                        !gestionPassword
+                      }
+                      onClick={() => {
+                        void (async () => {
+                          setGestionBusy(true);
+                          setGestionMsg(null);
+                          try {
+                            if (gestionApiUrl.trim()) {
+                              await gestionSetConfig(gestionApiUrl.trim());
+                            }
+                            const cfg = await gestionLogin(
+                              gestionUserName.trim(),
+                              gestionPassword,
+                            );
+                            setGestionApiUrl(cfg.apiUrl);
+                            setGestionLoggedIn(isGestionLoggedIn(cfg));
+                            setGestionUser(cfg.userName || null);
+                            setGestionPassword("");
+                            setGestionMsg("Connecté à Gestion");
+                            await refresh();
+                          } catch (err) {
+                            setGestionMsg(
+                              err instanceof Error
+                                ? err.message
+                                : "Connexion impossible",
+                            );
+                          } finally {
+                            setGestionBusy(false);
+                          }
+                        })();
+                      }}
+                    >
+                      Se connecter
+                    </button>
+                  </div>
+                </>
+              )}
               {gestionMsg && <p className="panel-muted">{gestionMsg}</p>}
             </div>
 

@@ -1,0 +1,397 @@
+//! HTTP client pour login.php + personal_tasks.php.
+
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::domain::{Task, TaskPriority, TaskStatus};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestionAuthUser {
+    pub id: i64,
+    pub username: String,
+    #[serde(default)]
+    pub nom: String,
+    #[serde(default)]
+    pub prenom: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestionLoginResponse {
+    pub token: String,
+    pub user: GestionAuthUser,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrateReport {
+    pub created: u32,
+    pub skipped: u32,
+    pub errors: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub migrated_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiTasksResponse {
+    success: Option<bool>,
+    tasks: Option<Vec<GestionTaskPayload>>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiOkResponse {
+    success: Option<bool>,
+    id: Option<String>,
+    error: Option<String>,
+}
+
+/// Payload brut personal_tasks (API PHP).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestionTaskPayload {
+    pub id: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub priority: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub completed: bool,
+    #[serde(default)]
+    pub due_date: Option<String>,
+    #[serde(default)]
+    pub assigned_to: Option<i64>,
+    #[serde(default)]
+    pub created_by: Option<i64>,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub documents: Vec<Value>,
+    #[serde(default)]
+    pub activities: Vec<Value>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+}
+
+impl GestionTaskPayload {
+    pub fn into_task(self) -> Task {
+        let status = TaskStatus::parse(&self.status).unwrap_or_else(|_| {
+            if self.completed {
+                TaskStatus::Done
+            } else {
+                TaskStatus::Todo
+            }
+        });
+        let priority = if self.priority.is_empty() {
+            Some(TaskPriority::Medium)
+        } else {
+            TaskPriority::parse(&self.priority).ok()
+        };
+        let created = self
+            .created_at
+            .clone()
+            .unwrap_or_else(crate::domain::now_iso);
+        let mut task = Task {
+            id: self.id,
+            title: self.title,
+            description: self.description,
+            category: self.category,
+            status,
+            completed: self.completed || status.is_done(),
+            priority,
+            due_date: self.due_date,
+            assigned_to: self.assigned_to,
+            created_by: self.created_by,
+            notes: self.notes,
+            documents: self.documents,
+            activities: self.activities,
+            project_id: None,
+            reminder: None,
+            created_at: created.clone(),
+            updated_at: created,
+        };
+        task.normalize();
+        task
+    }
+
+    pub fn from_task(task: &Task) -> Self {
+        Self {
+            id: task.id.clone(),
+            title: task.title.clone(),
+            description: task.description.clone(),
+            category: task.category.clone(),
+            priority: task
+                .priority
+                .unwrap_or(TaskPriority::Medium)
+                .as_str()
+                .to_string(),
+            status: task.status.as_str().to_string(),
+            completed: task.completed || task.status.is_done(),
+            due_date: task.due_date.clone(),
+            assigned_to: task.assigned_to,
+            created_by: task.created_by,
+            notes: task.notes.clone(),
+            documents: task.documents.clone(),
+            activities: task.activities.clone(),
+            created_at: Some(task.created_at.clone()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct GestionClient {
+    http: reqwest::Client,
+    base_url: String,
+    token: String,
+}
+
+impl GestionClient {
+    pub fn new(api_url: &str, token: &str) -> Result<Self, String> {
+        let base = api_url.trim().trim_end_matches('/').to_string();
+        if base.is_empty() {
+            return Err("URL API Gestion manquante".into());
+        }
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            http,
+            base_url: base,
+            token: token.trim().to_string(),
+        })
+    }
+
+    fn url(&self, endpoint: &str) -> String {
+        format!("{}/{}", self.base_url, endpoint.trim_start_matches('/'))
+    }
+
+    pub async fn login(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<GestionLoginResponse, String> {
+        let url = self.url("login.php");
+        let res = self
+            .http
+            .post(&url)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&serde_json::json!({
+                "username": username,
+                "password": password,
+            }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let body = res.text().await.map_err(|e| e.to_string())?;
+        if !status.is_success() {
+            let err = serde_json::from_str::<Value>(&body)
+                .ok()
+                .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.to_string()))
+                .unwrap_or_else(|| format!("login HTTP {status}"));
+            return Err(err);
+        }
+        let parsed: Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        if parsed.get("success").and_then(|v| v.as_bool()) == Some(false) {
+            return Err(parsed
+                .get("error")
+                .and_then(|e| e.as_str())
+                .unwrap_or("Identifiants incorrects")
+                .to_string());
+        }
+        let token = parsed
+            .get("token")
+            .and_then(|t| t.as_str())
+            .ok_or_else(|| "Réponse login sans token".to_string())?
+            .to_string();
+        let user_val = parsed
+            .get("user")
+            .cloned()
+            .ok_or_else(|| "Réponse login sans user".to_string())?;
+        let user: GestionAuthUser =
+            serde_json::from_value(user_val).map_err(|e| e.to_string())?;
+        Ok(GestionLoginResponse { token, user })
+    }
+
+    fn auth_headers(&self) -> Result<(String, String), String> {
+        if self.token.is_empty() {
+            return Err("Session Gestion absente — connecte-toi".into());
+        }
+        Ok((
+            format!("Bearer {}", self.token),
+            self.token.clone(),
+        ))
+    }
+
+    pub async fn list_tasks(&self, scope: Option<&str>) -> Result<Vec<Task>, String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let mut endpoint = "personal_tasks.php".to_string();
+        if let Some(s) = scope {
+            endpoint.push_str(&format!("?scope={s}&token={}", urlencoding_lite(&raw)));
+        } else {
+            endpoint.push_str(&format!("?token={}", urlencoding_lite(&raw)));
+        }
+        let url = self.url(&endpoint);
+        let res = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let body = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("personal_tasks GET HTTP {status}: {body}"));
+        }
+        let parsed: ApiTasksResponse = serde_json::from_str(&body).map_err(|e| {
+            format!("personal_tasks JSON: {e} — {}", body.chars().take(200).collect::<String>())
+        })?;
+        if let Some(err) = parsed.error {
+            return Err(err);
+        }
+        Ok(parsed
+            .tasks
+            .unwrap_or_default()
+            .into_iter()
+            .map(GestionTaskPayload::into_task)
+            .collect())
+    }
+
+    pub async fn create_task(&self, task: &Task) -> Result<(), String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("personal_tasks.php");
+        let mut payload = GestionTaskPayload::from_task(task);
+        // POST force status todo côté PHP — on envoie l'essentiel.
+        let body = serde_json::json!({
+            "id": payload.id,
+            "title": payload.title,
+            "description": payload.description,
+            "category": payload.category,
+            "priority": payload.priority,
+            "dueDate": payload.due_date,
+            "assignedTo": payload.assigned_to,
+            "token": raw,
+        });
+        let _ = &mut payload;
+        let res = self
+            .http
+            .post(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            let err = serde_json::from_str::<ApiOkResponse>(&text)
+                .ok()
+                .and_then(|r| r.error)
+                .unwrap_or(text);
+            return Err(format!("personal_tasks POST: {err}"));
+        }
+        Ok(())
+    }
+
+    pub async fn update_task(&self, task: &Task) -> Result<(), String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("personal_tasks.php");
+        let payload = GestionTaskPayload::from_task(task);
+        let body = serde_json::json!({
+            "id": payload.id,
+            "title": payload.title,
+            "description": payload.description,
+            "category": payload.category,
+            "priority": payload.priority,
+            "status": payload.status,
+            "completed": payload.completed,
+            "dueDate": payload.due_date,
+            "assignedTo": payload.assigned_to,
+            "notes": payload.notes,
+            "documents": payload.documents,
+            "activities": payload.activities,
+            "token": raw,
+        });
+        let res = self
+            .http
+            .put(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            let err = serde_json::from_str::<ApiOkResponse>(&text)
+                .ok()
+                .and_then(|r| r.error)
+                .unwrap_or(text);
+            return Err(format!("personal_tasks PUT: {err}"));
+        }
+        Ok(())
+    }
+
+    pub async fn delete_task(&self, id: &str) -> Result<(), String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("personal_tasks.php");
+        let body = serde_json::json!({ "id": id, "token": raw });
+        let res = self
+            .http
+            .delete(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            let text = res.text().await.unwrap_or_default();
+            return Err(format!("personal_tasks DELETE HTTP {status}: {text}"));
+        }
+        Ok(())
+    }
+}
+
+/// Encodage query minimal (évite dépendance urlencoding).
+fn urlencoding_lite(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() * 2);
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}

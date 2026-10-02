@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Project, Task } from "../../types/models";
+import { isTaskDone } from "../../types/models";
 import {
   fireAtInMinutes,
   fireAtTomorrowMorning,
@@ -120,7 +121,7 @@ function TaskRow({
   onClearReminder: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const done = task.status === "done";
+  const done = isTaskDone(task);
   const hasReminder = Boolean(task.reminder);
 
   return (

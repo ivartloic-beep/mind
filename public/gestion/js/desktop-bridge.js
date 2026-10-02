@@ -104,10 +104,74 @@
     };
   }
 
+  function tauriInvoke(cmd, args) {
+    try {
+      if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+        return window.__TAURI__.core.invoke(cmd, args || {});
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return Promise.resolve(null);
+  }
+
+  function syncSessionToMind() {
+    try {
+      var token = localStorage.getItem("authToken") || "";
+      var userRaw = localStorage.getItem("currentUser");
+      var userId = null;
+      var userName = null;
+      if (userRaw) {
+        try {
+          var u = JSON.parse(userRaw);
+          if (u && u.id != null) userId = Number(u.id);
+          if (u) {
+            userName = ((u.prenom || "") + " " + (u.nom || "")).trim() || u.username || null;
+          }
+        } catch (e2) {
+          /* ignore */
+        }
+      }
+      return tauriInvoke("gestion_set_session", {
+        token: token,
+        userId: userId,
+        userName: userName,
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+
+  function watchAuthStorage() {
+    window.addEventListener("storage", function (ev) {
+      if (ev.key === "authToken" || ev.key === "currentUser") {
+        syncSessionToMind();
+      }
+    });
+    // Poll léger : login dans la même WebView ne fire pas toujours `storage`.
+    var last = "";
+    setInterval(function () {
+      try {
+        var cur =
+          (localStorage.getItem("authToken") || "") +
+          "|" +
+          (localStorage.getItem("currentUser") || "");
+        if (cur !== last) {
+          last = cur;
+          syncSessionToMind();
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    }, 2000);
+  }
+
   function boot() {
     hideMailAndMessaging();
     renameEvenementielToProduction();
     showApiBannerIfNeeded();
+    watchAuthStorage();
+    syncSessionToMind();
     // Re-apply after SPA nav paints pages
     var obs = new MutationObserver(function () {
       hideMailAndMessaging();

@@ -13,13 +13,37 @@ pub const GESTION_LABEL: &str = "gestion";
 pub struct GestionPrefs {
     /// URL absolue de l’API PHP, ex. https://exemple.fr/api
     pub api_url: String,
+    /// Token session gestion (login.php).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_name: Option<String>,
+    /// Horodatage du dernier import one-shot SQLite → personal_tasks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasks_migrated_at: Option<String>,
 }
 
 impl Default for GestionPrefs {
     fn default() -> Self {
         Self {
             api_url: String::new(),
+            auth_token: None,
+            user_id: None,
+            user_name: None,
+            tasks_migrated_at: None,
         }
+    }
+}
+
+impl GestionPrefs {
+    pub fn is_logged_in(&self) -> bool {
+        self.auth_token
+            .as_deref()
+            .map(|t| !t.trim().is_empty())
+            .unwrap_or(false)
+            && !self.api_url.trim().is_empty()
     }
 }
 
@@ -39,26 +63,36 @@ pub fn load_prefs(app: &AppHandle) -> GestionPrefs {
         .unwrap_or_default()
 }
 
-fn save_prefs(app: &AppHandle, prefs: &GestionPrefs) -> Result<(), String> {
+pub fn save_prefs(app: &AppHandle, prefs: &GestionPrefs) -> Result<(), String> {
     let path = prefs_path(app)?;
     let raw = serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?;
     fs::write(path, raw).map_err(|e| e.to_string())
 }
 
-fn inject_api_url(window: &WebviewWindow, api_url: &str) {
-    if api_url.trim().is_empty() {
+fn inject_prefs(window: &WebviewWindow, prefs: &GestionPrefs) {
+    let api_url = prefs.api_url.trim();
+    if api_url.is_empty() && prefs.auth_token.is_none() {
         return;
     }
-    let escaped = api_url.replace('\\', "\\\\").replace('\'', "\\'");
+    let escaped_url = api_url.replace('\\', "\\\\").replace('\'', "\\'");
+    let token = prefs.auth_token.clone().unwrap_or_default();
+    let escaped_token = token.replace('\\', "\\\\").replace('\'', "\\'");
     let js = format!(
         r#"(function(){{
   try {{
-    localStorage.setItem('mind_gestion_api_url', '{url}');
-    window.API_URL = '{url}';
-    window.__MIND_GESTION_API_URL__ = '{url}';
+    if ('{url}') {{
+      localStorage.setItem('mind_gestion_api_url', '{url}');
+      window.API_URL = '{url}';
+      window.__MIND_GESTION_API_URL__ = '{url}';
+    }}
+    if ('{token}') {{
+      localStorage.setItem('authToken', '{token}');
+      window.authToken = '{token}';
+    }}
   }} catch (e) {{}}
 }})();"#,
-        url = escaped
+        url = escaped_url,
+        token = escaped_token
     );
     let _ = window.eval(&js);
 }
@@ -87,20 +121,20 @@ fn ensure_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     Ok(window)
 }
 
-/// Ouvre / focus la fenêtre Gestion et injecte l’URL API.
+/// Ouvre / focus la fenêtre Gestion et injecte l’URL API + session.
 pub fn show_gestion(app: &AppHandle) -> Result<(), String> {
     let prefs = load_prefs(app);
     let window = ensure_window(app)?;
-    inject_api_url(&window, &prefs.api_url);
+    inject_prefs(&window, &prefs);
     let _ = window.unminimize();
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
     // Ré-injecte après chargement (localStorage prêt).
-    let api = prefs.api_url.clone();
+    let prefs2 = prefs.clone();
     let win = window.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(400));
-        inject_api_url(&win, &api);
+        inject_prefs(&win, &prefs2);
     });
     Ok(())
 }
@@ -129,7 +163,52 @@ pub fn gestion_set_config(app: AppHandle, api_url: String) -> Result<GestionPref
     prefs.api_url = api_url.trim().trim_end_matches('/').to_string();
     save_prefs(&app, &prefs)?;
     if let Some(window) = app.get_webview_window(GESTION_LABEL) {
-        inject_api_url(&window, &prefs.api_url);
+        inject_prefs(&window, &prefs);
     }
     Ok(prefs)
+}
+
+#[tauri::command]
+pub async fn gestion_login(
+    app: AppHandle,
+    username: String,
+    password: String,
+) -> Result<GestionPrefs, String> {
+    let prefs = crate::gestion::login(&app, username, password).await?;
+    if let Some(window) = app.get_webview_window(GESTION_LABEL) {
+        inject_prefs(&window, &prefs);
+    }
+    Ok(prefs)
+}
+
+#[tauri::command]
+pub fn gestion_logout(app: AppHandle) -> Result<GestionPrefs, String> {
+    let prefs = crate::gestion::logout(&app)?;
+    if let Some(window) = app.get_webview_window(GESTION_LABEL) {
+        let _ = window.eval(
+            r#"(function(){try{localStorage.removeItem('authToken');window.authToken=null;}catch(e){}})();"#,
+        );
+    }
+    Ok(prefs)
+}
+
+#[tauri::command]
+pub fn gestion_set_session(
+    app: AppHandle,
+    token: String,
+    user_id: Option<i64>,
+    user_name: Option<String>,
+) -> Result<GestionPrefs, String> {
+    crate::gestion::set_session(&app, token, user_id, user_name)
+}
+
+#[tauri::command]
+pub async fn gestion_migrate_local_tasks(app: AppHandle) -> Result<crate::gestion::MigrateReport, String> {
+    let state = app.state::<crate::state::AppState>();
+    crate::gestion::migrate_local_tasks(&app, &state).await
+}
+
+#[tauri::command]
+pub fn gestion_tasks_backend_active(app: AppHandle) -> bool {
+    crate::gestion::tasks_backend_active(&app)
 }

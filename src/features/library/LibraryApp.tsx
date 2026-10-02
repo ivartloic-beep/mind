@@ -15,6 +15,7 @@ import {
 } from "../../services/api";
 import { listenDataChanged } from "../../services/events";
 import type { Note, Project, Task } from "../../types/models";
+import { isTaskDone, isTaskOpen } from "../../types/models";
 import { NotesPanel } from "../notes/NotesPanel";
 import {
   type ProjectFilterValue,
@@ -149,7 +150,11 @@ export function LibraryApp() {
     setTasks((rows) =>
       rows.map((row) =>
         row.id === task.id
-          ? { ...row, status: nextDone ? "done" : "active" }
+          ? {
+              ...row,
+              status: nextDone ? "done" : "todo",
+              completed: nextDone,
+            }
           : row,
       ),
     );
@@ -167,11 +172,17 @@ export function LibraryApp() {
   async function assignTaskProject(task: Task, projectId: string | null) {
     const previous = tasks;
     setPendingId(task.id);
+    const category =
+      projectId == null
+        ? ""
+        : projects.find((p) => p.id === projectId)?.name || task.category || "";
     setTasks((rows) =>
-      rows.map((row) => (row.id === task.id ? { ...row, projectId } : row)),
+      rows.map((row) =>
+        row.id === task.id ? { ...row, projectId, category } : row,
+      ),
     );
     try {
-      await upsertTask({ ...task, projectId });
+      await upsertTask({ ...task, projectId, category });
       await refreshTasks(filterRef.current);
     } catch {
       setTasks(previous);
@@ -231,8 +242,8 @@ export function LibraryApp() {
     }
   }
 
-  const activeTasks = tasks.filter((t) => t.status === "active");
-  const doneTasks = tasks.filter((t) => t.status === "done");
+  const activeTasks = tasks.filter((t) => isTaskOpen(t));
+  const doneTasks = tasks.filter((t) => isTaskDone(t));
 
   return (
     <div className="library-root">

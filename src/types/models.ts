@@ -1,5 +1,5 @@
 /**
- * Modèles V1 (contrat TS ↔ Rust) — camelCase, alignés sur le domaine Rust.
+ * Modèles V1 (contrat TS ↔ Rust) — camelCase, alignés sur le domaine Rust / gestion personal_tasks.
  */
 
 export type Project = {
@@ -9,21 +9,39 @@ export type Project = {
   createdAt: string;
 };
 
-export type TaskStatus = "active" | "done";
-export type TaskPriority = "low" | "normal" | "high";
+/** Statuts gestion (`active` legacy accepté côté Rust → todo). */
+export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskPriority = "low" | "medium" | "high";
 
 export type Task = {
   id: string;
   title: string;
+  description: string;
+  category: string;
   status: TaskStatus;
+  completed: boolean;
+  priority?: TaskPriority;
+  dueDate?: string;
+  assignedTo?: number | null;
+  createdBy?: number | null;
+  notes: string;
+  documents: unknown[];
+  activities: unknown[];
+  /** Overlay MIND — projet local. */
   projectId: string | null;
+  /** Overlay MIND — rappel Windows. */
+  reminder?: string;
   createdAt: string;
   updatedAt: string;
-  dueDate?: string;
-  reminder?: string;
-  priority?: TaskPriority;
-  notes?: string;
 };
+
+export function isTaskOpen(task: Pick<Task, "status" | "completed">): boolean {
+  return task.status !== "done" && !task.completed;
+}
+
+export function isTaskDone(task: Pick<Task, "status" | "completed">): boolean {
+  return task.status === "done" || task.completed;
+}
 
 /** Note / Idée uniquement — les tâches sont des `Task`. */
 export type NoteKind = "note" | "idea";

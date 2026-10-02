@@ -192,7 +192,7 @@ pub fn project_from_cloud(c: &CloudProject) -> Project {
 fn priority_to_int(p: Option<TaskPriority>) -> i64 {
     match p {
         Some(TaskPriority::Low) => 0,
-        Some(TaskPriority::Normal) | None => 1,
+        Some(TaskPriority::Medium) | None => 1,
         Some(TaskPriority::High) => 2,
     }
 }
@@ -200,7 +200,7 @@ fn priority_to_int(p: Option<TaskPriority>) -> i64 {
 fn priority_from_int(n: i64) -> Option<TaskPriority> {
     match n {
         ..=0 => Some(TaskPriority::Low),
-        1 => Some(TaskPriority::Normal),
+        1 => Some(TaskPriority::Medium),
         _ => Some(TaskPriority::High),
     }
 }
@@ -208,12 +208,9 @@ fn priority_from_int(n: i64) -> Option<TaskPriority> {
 pub fn task_to_cloud(t: &Task) -> CloudTask {
     let done = t.status.is_done();
     let notes = if let Some(rem) = &t.reminder {
-        attach_meta(
-            t.notes.as_deref().unwrap_or(""),
-            json!({ "reminder": rem }),
-        )
+        attach_meta(&t.notes, json!({ "reminder": rem }))
     } else {
-        t.notes.clone().unwrap_or_default()
+        t.notes.clone()
     };
     CloudTask {
         id: t.id.clone(),
@@ -223,7 +220,7 @@ pub fn task_to_cloud(t: &Task) -> CloudTask {
         status: if done {
             "done".into()
         } else {
-            "active".into()
+            t.status.as_str().into()
         },
         priority: priority_to_int(t.priority),
         due_at: t.due_date.clone(),
@@ -244,13 +241,24 @@ pub fn task_from_cloud(c: &CloudTask) -> Task {
     let status = if c.status == "done" || c.completed_at.is_some() {
         TaskStatus::Done
     } else {
-        TaskStatus::Active
+        TaskStatus::parse(&c.status).unwrap_or(TaskStatus::Todo)
     };
-    Task {
+    let mut task = Task {
         id: c.id.clone(),
         title: c.title.clone(),
+        description: String::new(),
+        category: String::new(),
         status,
+        completed: status.is_done(),
+        priority: priority_from_int(c.priority),
+        due_date: c.due_at.clone(),
+        assigned_to: None,
+        created_by: None,
+        notes: notes_body,
+        documents: Vec::new(),
+        activities: Vec::new(),
         project_id: c.project_id.clone(),
+        reminder: meta_str(&meta, "reminder"),
         created_at: c
             .created_at
             .clone()
@@ -259,15 +267,9 @@ pub fn task_from_cloud(c: &CloudTask) -> Task {
             .updated_at
             .clone()
             .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
-        due_date: c.due_at.clone(),
-        reminder: meta_str(&meta, "reminder"),
-        priority: priority_from_int(c.priority),
-        notes: if notes_body.is_empty() {
-            None
-        } else {
-            Some(notes_body)
-        },
-    }
+    };
+    task.normalize();
+    task
 }
 
 pub fn note_to_cloud(n: &Note) -> CloudNote {

@@ -1,11 +1,22 @@
 /**
- * Shell Gestion — config API PHP distante.
+ * Shell Gestion — config API PHP, session, migration tâches.
  */
 
 import { invoke } from "@tauri-apps/api/core";
 
 export type GestionConfig = {
   apiUrl: string;
+  authToken?: string | null;
+  userId?: number | null;
+  userName?: string | null;
+  tasksMigratedAt?: string | null;
+};
+
+export type GestionMigrateReport = {
+  created: number;
+  skipped: number;
+  errors: string[];
+  migratedAt?: string | null;
 };
 
 export function gestionShow(): Promise<void> {
@@ -18,4 +29,27 @@ export function gestionGetConfig(): Promise<GestionConfig> {
 
 export function gestionSetConfig(apiUrl: string): Promise<GestionConfig> {
   return invoke<GestionConfig>("gestion_set_config", { apiUrl });
+}
+
+export function gestionLogin(
+  username: string,
+  password: string,
+): Promise<GestionConfig> {
+  return invoke<GestionConfig>("gestion_login", { username, password });
+}
+
+export function gestionLogout(): Promise<GestionConfig> {
+  return invoke<GestionConfig>("gestion_logout");
+}
+
+export function gestionMigrateLocalTasks(): Promise<GestionMigrateReport> {
+  return invoke<GestionMigrateReport>("gestion_migrate_local_tasks");
+}
+
+export function gestionTasksBackendActive(): Promise<boolean> {
+  return invoke<boolean>("gestion_tasks_backend_active");
+}
+
+export function isGestionLoggedIn(cfg: GestionConfig | null | undefined): boolean {
+  return Boolean(cfg?.apiUrl?.trim() && cfg?.authToken?.trim());
 }

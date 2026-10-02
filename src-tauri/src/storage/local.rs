@@ -57,15 +57,22 @@ impl LocalStorage {
                 CREATE TABLE IF NOT EXISTS tasks (
                   id TEXT PRIMARY KEY NOT NULL,
                   title TEXT NOT NULL,
+                  description TEXT NOT NULL DEFAULT '',
+                  category TEXT NOT NULL DEFAULT '',
                   done INTEGER NOT NULL DEFAULT 0,
-                  status TEXT NOT NULL DEFAULT 'active',
+                  completed INTEGER NOT NULL DEFAULT 0,
+                  status TEXT NOT NULL DEFAULT 'todo',
                   project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL,
                   due_date TEXT,
                   reminder TEXT,
                   priority TEXT,
-                  notes TEXT
+                  notes TEXT NOT NULL DEFAULT '',
+                  assigned_to INTEGER,
+                  created_by INTEGER,
+                  documents TEXT NOT NULL DEFAULT '[]',
+                  activities TEXT NOT NULL DEFAULT '[]'
                 );
 
                 CREATE TABLE IF NOT EXISTS notes (
@@ -131,22 +138,52 @@ fn ensure_column(conn: &Connection, table: &str, column: &str, ddl: &str) -> Sto
 }
 
 fn migrate_tasks_columns(conn: &Connection) -> StorageResult<()> {
-    ensure_column(conn, "tasks", "status", "status TEXT NOT NULL DEFAULT 'active'")?;
+    ensure_column(conn, "tasks", "status", "status TEXT NOT NULL DEFAULT 'todo'")?;
     ensure_column(conn, "tasks", "due_date", "due_date TEXT")?;
     ensure_column(conn, "tasks", "reminder", "reminder TEXT")?;
     ensure_column(conn, "tasks", "priority", "priority TEXT")?;
-    ensure_column(conn, "tasks", "notes", "notes TEXT")?;
-    // Bases étape 2–4 : synchroniser status depuis l'ancien booléen `done`.
+    ensure_column(conn, "tasks", "notes", "notes TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(
+        conn,
+        "tasks",
+        "description",
+        "description TEXT NOT NULL DEFAULT ''",
+    )?;
+    ensure_column(conn, "tasks", "category", "category TEXT NOT NULL DEFAULT ''")?;
+    ensure_column(conn, "tasks", "completed", "completed INTEGER NOT NULL DEFAULT 0")?;
+    ensure_column(conn, "tasks", "assigned_to", "assigned_to INTEGER")?;
+    ensure_column(conn, "tasks", "created_by", "created_by INTEGER")?;
+    ensure_column(
+        conn,
+        "tasks",
+        "documents",
+        "documents TEXT NOT NULL DEFAULT '[]'",
+    )?;
+    ensure_column(
+        conn,
+        "tasks",
+        "activities",
+        "activities TEXT NOT NULL DEFAULT '[]'",
+    )?;
+    // Legacy MIND → schéma gestion.
     conn.execute(
-        "UPDATE tasks SET status = 'done' WHERE done = 1 AND status != 'done'",
+        "UPDATE tasks SET status = 'todo' WHERE status = 'active' OR status IS NULL OR status = ''",
         [],
     )?;
     conn.execute(
-        "UPDATE tasks SET done = 1 WHERE status = 'done' AND done != 1",
+        "UPDATE tasks SET priority = 'medium' WHERE priority = 'normal'",
         [],
     )?;
     conn.execute(
-        "UPDATE tasks SET done = 0 WHERE status = 'active' AND done != 0",
+        "UPDATE tasks SET status = 'done' WHERE (done = 1 OR completed = 1) AND status != 'done'",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE tasks SET done = 1, completed = 1 WHERE status = 'done'",
+        [],
+    )?;
+    conn.execute(
+        "UPDATE tasks SET done = 0, completed = 0 WHERE status != 'done'",
         [],
     )?;
     Ok(())
@@ -252,7 +289,9 @@ impl Storage for LocalStorage {
     fn list_tasks(&self, filter: &TaskFilter) -> StorageResult<Vec<Task>> {
         self.with_conn(|conn| {
             let mut sql = String::from(
-                "SELECT id, title, status, project_id, created_at, updated_at, due_date, reminder, priority, notes
+                "SELECT id, title, description, category, status, completed, priority, due_date,
+                        assigned_to, created_by, notes, documents, activities, project_id,
+                        reminder, created_at, updated_at
                  FROM tasks WHERE 1=1",
             );
             let mut values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -264,10 +303,11 @@ impl Storage for LocalStorage {
                 values.push(Box::new(project_id.clone()));
             }
             if let Some(done) = filter.done {
-                sql.push_str(" AND status = ?");
-                values.push(Box::new(
-                    if done { "done" } else { "active" }.to_string(),
-                ));
+                if done {
+                    sql.push_str(" AND status = 'done'");
+                } else {
+                    sql.push_str(" AND status != 'done'");
+                }
             }
             sql.push_str(" ORDER BY created_at DESC");
 
@@ -282,7 +322,9 @@ impl Storage for LocalStorage {
     fn get_task(&self, id: &str) -> StorageResult<Option<Task>> {
         self.with_conn(|conn| {
             conn.query_row(
-                "SELECT id, title, status, project_id, created_at, updated_at, due_date, reminder, priority, notes
+                "SELECT id, title, description, category, status, completed, priority, due_date,
+                        assigned_to, created_by, notes, documents, activities, project_id,
+                        reminder, created_at, updated_at
                  FROM tasks WHERE id = ?1",
                 params![id],
                 map_task,
@@ -294,26 +336,42 @@ impl Storage for LocalStorage {
 
     fn upsert_task(&self, task: &Task) -> StorageResult<()> {
         self.with_conn(|conn| {
+            let mut task = task.clone();
+            task.normalize();
             let done = if task.status.is_done() { 1 } else { 0 };
             let priority = task.priority.map(|p| p.as_str().to_string());
+            let documents = serde_json::to_string(&task.documents).unwrap_or_else(|_| "[]".into());
+            let activities =
+                serde_json::to_string(&task.activities).unwrap_or_else(|_| "[]".into());
             conn.execute(
                 "INSERT INTO tasks (
-                    id, title, done, status, project_id, created_at, updated_at,
-                    due_date, reminder, priority, notes
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                    id, title, description, category, done, completed, status, project_id,
+                    created_at, updated_at, due_date, reminder, priority, notes,
+                    assigned_to, created_by, documents, activities
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
                  ON CONFLICT(id) DO UPDATE SET
                    title = excluded.title,
+                   description = excluded.description,
+                   category = excluded.category,
                    done = excluded.done,
+                   completed = excluded.completed,
                    status = excluded.status,
                    project_id = excluded.project_id,
                    updated_at = excluded.updated_at,
                    due_date = excluded.due_date,
                    reminder = excluded.reminder,
                    priority = excluded.priority,
-                   notes = excluded.notes",
+                   notes = excluded.notes,
+                   assigned_to = excluded.assigned_to,
+                   created_by = excluded.created_by,
+                   documents = excluded.documents,
+                   activities = excluded.activities",
                 params![
                     task.id,
                     task.title,
+                    task.description,
+                    task.category,
+                    done,
                     done,
                     task.status.as_str(),
                     task.project_id,
@@ -322,7 +380,11 @@ impl Storage for LocalStorage {
                     task.due_date,
                     task.reminder,
                     priority,
-                    task.notes
+                    task.notes,
+                    task.assigned_to,
+                    task.created_by,
+                    documents,
+                    activities
                 ],
             )?;
             Ok(())
@@ -542,29 +604,49 @@ impl Storage for LocalStorage {
 fn map_task(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     use crate::domain::{TaskPriority, TaskStatus};
 
-    let status_raw: String = row.get(2)?;
+    // id, title, description, category, status, completed, priority, due_date,
+    // assigned_to, created_by, notes, documents, activities, project_id,
+    // reminder, created_at, updated_at
+    let status_raw: String = row.get(4)?;
     let status = TaskStatus::parse(&status_raw).map_err(|e| {
-        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, e.into())
+        rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, e.into())
     })?;
-    let priority_raw: Option<String> = row.get(8)?;
+    let completed: i32 = row.get(5)?;
+    let priority_raw: Option<String> = row.get(6)?;
     let priority = match priority_raw {
         Some(raw) => Some(TaskPriority::parse(&raw).map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, e.into())
+            rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, e.into())
         })?),
         None => None,
     };
-    Ok(Task {
+    let notes: Option<String> = row.get(10)?;
+    let documents_raw: String = row.get::<_, Option<String>>(11)?.unwrap_or_else(|| "[]".into());
+    let activities_raw: String = row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "[]".into());
+    let documents: Vec<serde_json::Value> =
+        serde_json::from_str(&documents_raw).unwrap_or_default();
+    let activities: Vec<serde_json::Value> =
+        serde_json::from_str(&activities_raw).unwrap_or_default();
+    let mut task = Task {
         id: row.get(0)?,
         title: row.get(1)?,
+        description: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+        category: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
         status,
-        project_id: row.get(3)?,
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
-        due_date: row.get(6)?,
-        reminder: row.get(7)?,
+        completed: completed != 0 || status.is_done(),
         priority,
-        notes: row.get(9)?,
-    })
+        due_date: row.get(7)?,
+        assigned_to: row.get(8)?,
+        created_by: row.get(9)?,
+        notes: notes.unwrap_or_default(),
+        documents,
+        activities,
+        project_id: row.get(13)?,
+        reminder: row.get(14)?,
+        created_at: row.get(15)?,
+        updated_at: row.get(16)?,
+    };
+    task.normalize();
+    Ok(task)
 }
 
 fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
@@ -633,14 +715,21 @@ mod tests {
             let task = Task {
                 id: new_id(),
                 title: "Acheter lait".into(),
-                status: crate::domain::TaskStatus::Active,
+                description: String::new(),
+                category: String::new(),
+                status: crate::domain::TaskStatus::Todo,
+                completed: false,
+                priority: Some(crate::domain::TaskPriority::Medium),
+                due_date: None,
+                assigned_to: None,
+                created_by: None,
+                notes: String::new(),
+                documents: Vec::new(),
+                activities: Vec::new(),
                 project_id: Some(project.id.clone()),
+                reminder: None,
                 created_at: now.clone(),
                 updated_at: now.clone(),
-                due_date: None,
-                reminder: None,
-                priority: Some(crate::domain::TaskPriority::Normal),
-                notes: None,
             };
             db.upsert_task(&task).unwrap();
 
@@ -648,6 +737,7 @@ mod tests {
             done_task.id = new_id();
             done_task.title = "Déjà fait".into();
             done_task.status = crate::domain::TaskStatus::Done;
+            done_task.completed = true;
             db.upsert_task(&done_task).unwrap();
 
             let note = Note {

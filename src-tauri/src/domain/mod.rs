@@ -12,24 +12,29 @@ pub struct Project {
     pub created_at: String,
 }
 
+/// Statuts alignés sur gestion `personal_tasks` (`todo` / `in_progress` / `done`).
+/// `active` (legacy MIND) est accepté en lecture → `Todo`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
-    Active,
+    Todo,
+    InProgress,
     Done,
 }
 
 impl TaskStatus {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Active => "active",
+            Self::Todo => "todo",
+            Self::InProgress => "in_progress",
             Self::Done => "done",
         }
     }
 
     pub fn parse(value: &str) -> Result<Self, String> {
         match value {
-            "active" => Ok(Self::Active),
+            "todo" | "active" => Ok(Self::Todo),
+            "in_progress" | "inprogress" => Ok(Self::InProgress),
             "done" => Ok(Self::Done),
             other => Err(format!("invalid task status: {other}")),
         }
@@ -38,13 +43,18 @@ impl TaskStatus {
     pub fn is_done(self) -> bool {
         matches!(self, Self::Done)
     }
+
+    pub fn is_open(self) -> bool {
+        !self.is_done()
+    }
 }
 
+/// Priorités gestion (`low` / `medium` / `high`). `normal` (legacy) → `Medium`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum TaskPriority {
     Low,
-    Normal,
+    Medium,
     High,
 }
 
@@ -52,7 +62,7 @@ impl TaskPriority {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Low => "low",
-            Self::Normal => "normal",
+            Self::Medium => "medium",
             Self::High => "high",
         }
     }
@@ -60,30 +70,63 @@ impl TaskPriority {
     pub fn parse(value: &str) -> Result<Self, String> {
         match value {
             "low" => Ok(Self::Low),
-            "normal" => Ok(Self::Normal),
+            "medium" | "normal" => Ok(Self::Medium),
             "high" => Ok(Self::High),
             other => Err(format!("invalid task priority: {other}")),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Document joint (gestion) — forme souple.
+pub type TaskDocument = serde_json::Value;
+/// Activité / historique (gestion) — forme souple.
+pub type TaskActivity = serde_json::Value;
+
+/// Tâche — schéma gestion `personal_tasks` + extensions MIND (`projectId`, `reminder`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Task {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub category: String,
     pub status: TaskStatus,
-    pub project_id: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub due_date: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reminder: Option<String>,
+    #[serde(default)]
+    pub completed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub priority: Option<TaskPriority>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub notes: Option<String>,
+    pub due_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assigned_to: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<i64>,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub documents: Vec<TaskDocument>,
+    #[serde(default)]
+    pub activities: Vec<TaskActivity>,
+    /// Overlay MIND (pas dans personal_tasks) — projet local.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    /// Overlay MIND — rappel local / notif Windows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminder: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl Task {
+    pub fn normalize(&mut self) {
+        if self.status.is_done() {
+            self.completed = true;
+        } else if self.completed {
+            self.status = TaskStatus::Done;
+        }
+    }
 }
 
 /// Kind pour une Note (capture Note / Idée). Les tâches vont dans `Task`.

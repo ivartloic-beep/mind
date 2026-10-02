@@ -10,7 +10,7 @@
 
 ## Phases
 
-### Phase 1 — Shell (en cours)
+### Phase 1 — Shell (livré)
 
 - Front gestion embarqué (`public/gestion/`) dans Tauri.
 - Fenêtre principale = app gestion.
@@ -18,11 +18,15 @@
 - `API_URL` configurable (serveur PHP existant).
 - MIND inchangé en overlay : tray, panneau, capture, timer, raccourcis.
 
-### Phase 2 — Tâches unifiées
+### Phase 2 — Tâches unifiées (livré)
 
-- Capture / panneau MIND → CRUD `personal_tasks` (schéma gestion).
-- Import one-shot des tâches SQLite MIND actuelles.
-- Fiche tâche (assignation, docs, activités) via UI gestion ou pont.
+- Modèle Task MIND = schéma gestion (`todo` / `in_progress` / `done`, priority medium, description, category, assignedTo, documents, activities…).
+- Si session Gestion (URL + token) : capture / panneau / bibliothèque CRUD → `personal_tasks.php`.
+- Sinon : SQLite local (même schéma élargi).
+- Rappels MIND (`reminder`) restent locaux (overlay).
+- Login depuis Paramètres panneau, ou session reprise depuis la WebView Gestion.
+- Import one-shot : bouton « Importer tâches locales ».
+- Fiche tâche riche (docs / activités / assignation) via UI Gestion.
 
 ### Phase 3 — Durcissement
 
@@ -34,7 +38,13 @@
 Fichier local : `{app_data}/gestion-prefs.json`
 
 ```json
-{ "apiUrl": "https://votre-domaine.tld/chemin/api" }
+{
+  "apiUrl": "https://votre-domaine.tld/chemin/api",
+  "authToken": "…",
+  "userId": 1,
+  "userName": "Loïc",
+  "tasksMigratedAt": "2026-…"
+}
 ```
 
-Aussi : Paramètres MIND → section Gestion, ou `localStorage.mind_gestion_api_url` dans la WebView.
+Aussi : Paramètres MIND → section Gestion, ou `localStorage.mind_gestion_api_url` / `authToken` dans la WebView.
