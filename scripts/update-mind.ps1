@@ -9,7 +9,7 @@ Set-Location $Root
 Write-Host "=== Mise a jour MIND ===" -ForegroundColor Cyan
 Write-Host ("Dossier: " + $Root)
 
-foreach ($n in @("ma-tete", "Ma Tete", "Ma Tête", "mind")) {
+foreach ($n in @("ma-tete", "Ma Tete", "mind")) {
     Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
         Write-Host ("Arret: " + $_.ProcessName) -ForegroundColor Yellow
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
@@ -23,7 +23,7 @@ npm install
 if ($LASTEXITCODE -ne 0) { throw "npm install a echoue" }
 
 Write-Host ""
-Write-Host "OK — code a jour. Utilise Ouvrir MIND (mode dev)." -ForegroundColor Green
+Write-Host "OK - code a jour. Utilise Ouvrir MIND (mode dev)." -ForegroundColor Green
 Write-Host "Dans l'app: engrenage Parametres -> Configurer -> Token API." -ForegroundColor Cyan
 Write-Host "Appuie sur une touche pour fermer..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")

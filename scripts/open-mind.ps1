@@ -1,4 +1,4 @@
-# Ouvrir MIND — toujours le code Git via desktop:dev (pas l'ancien exe).
+# Ouvrir MIND - toujours le code Git via desktop:dev (pas l'ancien exe).
 $ErrorActionPreference = "Continue"
 
 function Wait-Key {
@@ -30,9 +30,7 @@ if (-not (Test-Path (Join-Path $Root "package.json"))) {
 }
 Set-Location -LiteralPath $Root
 
-# Couper les anciennes instances (exe ou tauri) qui affichent l'ancienne UI.
-$names = @("ma-tete", "Ma Tete", "Ma Tête", "mind")
-foreach ($n in $names) {
+foreach ($n in @("ma-tete", "Ma Tete", "mind")) {
     Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
         Write-Host ("Arret process: " + $_.ProcessName + " PID " + $_.Id) -ForegroundColor Yellow
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
@@ -46,7 +44,7 @@ if (-not $npm) {
 
 $devScript = Join-Path $Root "scripts\open-mind-dev.ps1"
 if (-not (Test-Path $devScript)) {
-    Fail ("Script manquant: " + $devScript + " — fais git pull origin main")
+    Fail ("Script manquant: " + $devScript + " - fais git pull origin main")
 }
 
 Write-Host "Lancement MIND (code Git a jour, desktop:dev)..." -ForegroundColor Cyan

@@ -12,7 +12,6 @@ foreach ($n in @("ma-tete", "Ma Tete", "mind")) {
     }
 }
 
-# desktop:dev = node (vite / tauri) lie au dossier mind
 try {
     Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
         Where-Object {
