@@ -1,10 +1,10 @@
-# Arreter MIND — ferme toutes les instances (exe + desktop:dev).
+# Arreter MIND - ferme toutes les instances (exe + desktop:dev).
 $ErrorActionPreference = "Continue"
 
 Write-Host "=== Arreter MIND ===" -ForegroundColor Cyan
 $stopped = 0
 
-foreach ($n in @("ma-tete", "Ma Tete", "Ma Tête", "mind")) {
+foreach ($n in @("ma-tete", "Ma Tete", "mind")) {
     Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
         Write-Host ("Arret: " + $_.ProcessName + " PID " + $_.Id) -ForegroundColor Yellow
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
