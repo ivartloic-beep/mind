@@ -17,7 +17,7 @@ Nom provisoire : **Ma Tête**.
 - **Étape 8** : post-its fenêtres natives (`postit-{id}`), persistés, liés à Note
 - **Étape 9** : minuteur 25/5 (démarrer / pause / notif Windows)
 - **Étape 10** : rappels tâche (🔔, notif Windows, snooze +10 min / +1 h / demain)
-- **Étape 11** : raccourcis globaux CTRL+ALT+N (capture) / CTRL+ALT+Espace (panneau)
+- **Étape 11** : raccourcis globaux CTRL+ALT+N (capture) / CTRL+ALT+Espace (panneau) / CTRL+ALT+B (bibliothèque) — liste aussi dans Paramètres
 - **Étape 12** : tray + menu, autostart ON, single-instance, boot sans flash
 - **UX** : capture fermable (✕/Échap) · post-its autonomes (CTRL+ALT+P, croix=supprimer, CTRL+ALT+H masquer/réafficher) · panneau compact + Bibliothèque (réouvrable) · minuteur durée libre (+5 min)
 - **Cloud** : sync optionnelle vers `https://mind.louetline.fr` (Réglages → token + Synchroniser)
