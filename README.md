@@ -32,11 +32,32 @@ V1 desktop + polish UX. Test réel Windows recommandé via installateur **NSIS**
 
 Cible produit : **Windows** (installeur **NSIS**).
 
-## Lancer
+## Usage quotidien (sans terminal)
+
+`npm run tauri dev` ouvre toujours un terminal — c’est le mode développement.
+Pour une app normale (icône Bureau, pas de console) :
+
+```powershell
+cd mind
+git pull origin main
+npm install
+npm run desktop:build
+```
+
+Puis lance l’installeur généré :
+
+`src-tauri\target\release\bundle\nsis\Ma Tête_*_x64-setup.exe`
+
+- Coche / accepte le raccourci **Bureau** (aussi créé automatiquement).
+- Démarre via l’icône **Ma Tête** sur le Bureau (pas de fenêtre noire).
+- Arrêt : icône tray (barre des tâches) → **Quitter**.
+- Redémarrage : recliquer l’icône Bureau.
+
+## Lancer en développement
 
 ```bash
 npm install
-npm run tauri dev
+npm run desktop:dev
 ```
 
 Équivalents :
