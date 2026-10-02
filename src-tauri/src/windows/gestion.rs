@@ -468,6 +468,14 @@ pub fn gestion_set_session(
     let prefs = crate::gestion::set_session(&app, token, user_id, user_name)?;
     if prefs.auth_token.as_deref().map(|t| !t.is_empty()).unwrap_or(false) {
         crate::gestion::schedule_sync(&app);
+        // Le panneau doit rafraîchir `gestionLoggedIn` (dépôt fichier, sync…).
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "sync".into(),
+                id: "session".into(),
+            },
+        );
     }
     Ok(prefs)
 }

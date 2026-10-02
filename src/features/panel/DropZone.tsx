@@ -4,7 +4,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { listProjects } from "../../services/api";
-import { gestionUploadFile } from "../../services/gestion";
+import {
+  gestionGetConfig,
+  gestionTasksBackendActive,
+  gestionUploadFile,
+  isGestionLoggedIn,
+} from "../../services/gestion";
 import type { Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 
@@ -16,8 +21,10 @@ type PendingFile = {
 };
 
 type Props = {
+  /** Indication UI — la session est toujours re-vérifiée au dépôt. */
   loggedIn: boolean;
   onNeedLogin: () => void;
+  onSessionResolved?: (loggedIn: boolean) => void;
 };
 
 async function fileToPending(file: File): Promise<PendingFile> {
@@ -36,7 +43,20 @@ async function fileToPending(file: File): Promise<PendingFile> {
   };
 }
 
-export function DropZone({ loggedIn, onNeedLogin }: Props) {
+async function sessionIsActive(): Promise<boolean> {
+  try {
+    if (await gestionTasksBackendActive()) return true;
+  } catch {
+    /* fallback config */
+  }
+  try {
+    return isGestionLoggedIn(await gestionGetConfig());
+  } catch {
+    return false;
+  }
+}
+
+export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
   const [dragging, setDragging] = useState(false);
   const [pending, setPending] = useState<PendingFile | null>(null);
   const [dest, setDest] = useState<"bureau" | "project">("bureau");
@@ -45,6 +65,7 @@ export function DropZone({ loggedIn, onNeedLogin }: Props) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
 
   useEffect(() => {
     void listProjects()
@@ -56,11 +77,6 @@ export function DropZone({ loggedIn, onNeedLogin }: Props) {
     async (files: FileList | File[]) => {
       const list = Array.from(files);
       if (!list.length) return;
-      if (!loggedIn) {
-        onNeedLogin();
-        setError("Connecte-toi à Gestion pour déposer un fichier.");
-        return;
-      }
       const file = list[0];
       if (file.size > 25 * 1024 * 1024) {
         setError("Fichier trop volumineux (max 25 Mo).");
@@ -70,6 +86,15 @@ export function DropZone({ loggedIn, onNeedLogin }: Props) {
       setMsg(null);
       setBusy(true);
       try {
+        // Ne pas se fier uniquement au state React (session Gestion peut arriver via bridge).
+        const active = loggedIn || (await sessionIsActive());
+        onSessionResolved?.(active);
+        if (!active) {
+          setNeedsLogin(true);
+          setError("Connecte-toi à Gestion pour déposer un fichier.");
+          return;
+        }
+        setNeedsLogin(false);
         setPending(await fileToPending(file));
         setDest("bureau");
         setProjectId(null);
@@ -79,7 +104,7 @@ export function DropZone({ loggedIn, onNeedLogin }: Props) {
         setBusy(false);
       }
     },
-    [loggedIn, onNeedLogin],
+    [loggedIn, onSessionResolved],
   );
 
   async function confirmUpload() {
@@ -209,6 +234,15 @@ export function DropZone({ loggedIn, onNeedLogin }: Props) {
       )}
       {msg && <p className="panel-muted drop-zone-msg">{msg}</p>}
       {error && <p className="panel-error drop-zone-msg">{error}</p>}
+      {needsLogin && (
+        <button
+          type="button"
+          className="panel-link-btn drop-zone-login"
+          onClick={onNeedLogin}
+        >
+          Ouvrir la connexion Gestion
+        </button>
+      )}
     </section>
   );
 }

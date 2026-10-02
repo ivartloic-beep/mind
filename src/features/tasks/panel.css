@@ -1271,6 +1271,11 @@
   font-size: 0.72rem;
 }
 
+.drop-zone-login {
+  align-self: flex-start;
+  font-size: 0.78rem;
+}
+
 html,
 body,
 #root {

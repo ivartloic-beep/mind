@@ -1031,6 +1031,10 @@ export function PanelApp() {
                 <DropZone
                   loggedIn={gestionLoggedIn}
                   onNeedLogin={() => setSettingsOpen(true)}
+                  onSessionResolved={(ok) => {
+                    setGestionLoggedIn(ok);
+                    gestionLoggedInRef.current = ok;
+                  }}
                 />
               </>
             )}
@@ -1094,6 +1098,10 @@ export function PanelApp() {
                   <DropZone
                     loggedIn={gestionLoggedIn}
                     onNeedLogin={() => setSettingsOpen(true)}
+                    onSessionResolved={(ok) => {
+                      setGestionLoggedIn(ok);
+                      gestionLoggedInRef.current = ok;
+                    }}
                   />
                 )}
               </section>
