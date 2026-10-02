@@ -1,14 +1,17 @@
 /**
  * Zone déposer → workspace Gestion (bureau ou projet).
+ * Drag-and-drop OS via events Tauri (HTML5 DnD ne reçoit pas les drops Windows).
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listProjects } from "../../services/api";
 import {
   gestionGetConfig,
   gestionTasksBackendActive,
   gestionUploadFile,
   isGestionLoggedIn,
+  readDroppedFile,
 } from "../../services/gestion";
 import type { Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
@@ -26,6 +29,10 @@ type Props = {
   onNeedLogin: () => void;
   onSessionResolved?: (loggedIn: boolean) => void;
 };
+
+function inTauri(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
 
 async function fileToPending(file: File): Promise<PendingFile> {
   const buf = await file.arrayBuffer();
@@ -73,12 +80,9 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       .catch(() => setProjects([]));
   }, [pending]);
 
-  const takeFiles = useCallback(
-    async (files: FileList | File[]) => {
-      const list = Array.from(files);
-      if (!list.length) return;
-      const file = list[0];
-      if (file.size > 25 * 1024 * 1024) {
+  const beginPending = useCallback(
+    async (next: PendingFile) => {
+      if (next.size > 25 * 1024 * 1024) {
         setError("Fichier trop volumineux (max 25 Mo).");
         return;
       }
@@ -86,7 +90,6 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       setMsg(null);
       setBusy(true);
       try {
-        // Ne pas se fier uniquement au state React (session Gestion peut arriver via bridge).
         const active = loggedIn || (await sessionIsActive());
         onSessionResolved?.(active);
         if (!active) {
@@ -95,17 +98,84 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
           return;
         }
         setNeedsLogin(false);
-        setPending(await fileToPending(file));
+        setPending(next);
         setDest("bureau");
         setProjectId(null);
-      } catch {
-        setError("Lecture du fichier impossible.");
       } finally {
         setBusy(false);
       }
     },
     [loggedIn, onSessionResolved],
   );
+
+  const takeFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (!list.length) return;
+      try {
+        await beginPending(await fileToPending(list[0]));
+      } catch {
+        setError("Lecture du fichier impossible.");
+      }
+    },
+    [beginPending],
+  );
+
+  const takeOsPaths = useCallback(
+    async (paths: string[]) => {
+      const path = paths.find((p) => p.trim().length > 0);
+      if (!path) return;
+      setBusy(true);
+      setError(null);
+      setMsg(null);
+      try {
+        const file = await readDroppedFile(path);
+        await beginPending({
+          name: file.filename,
+          mime: file.mime,
+          base64: file.dataBase64,
+          size: file.size,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Lecture du fichier impossible.");
+        setBusy(false);
+      }
+    },
+    [beginPending],
+  );
+
+  // Drag-and-drop natif Tauri (Explorer → panneau Windows).
+  useEffect(() => {
+    if (!inTauri()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (cancelled) return;
+        const { type } = event.payload;
+        if (type === "enter" || type === "over") {
+          setDragging(true);
+          return;
+        }
+        if (type === "leave") {
+          setDragging(false);
+          return;
+        }
+        if (type === "drop") {
+          setDragging(false);
+          void takeOsPaths(event.payload.paths);
+        }
+      })
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [takeOsPaths]);
 
   async function confirmUpload() {
     if (!pending || busy) return;
@@ -162,7 +232,7 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
         >
           <p className="drop-zone-title">Déposer un fichier</p>
           <p className="drop-zone-hint">
-            Bureau Gestion ou projet — PDF, images, docs…
+            Glisse-dépose ici, ou choisis — Bureau / projet Gestion
           </p>
           <label className="drop-zone-browse">
             Choisir

@@ -247,6 +247,80 @@ pub struct GestionUploadReport {
     pub element_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DroppedFilePayload {
+    pub filename: String,
+    pub mime: String,
+    pub data_base64: String,
+    pub size: u64,
+}
+
+fn mime_from_path(path: &std::path::Path) -> String {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("pdf") => "application/pdf",
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("txt") => "text/plain",
+        Some("csv") => "text/csv",
+        Some("json") => "application/json",
+        Some("doc") => "application/msword",
+        Some("docx") => {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        }
+        Some("xls") => "application/vnd.ms-excel",
+        Some("xlsx") => {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        }
+        Some("ppt") => "application/vnd.ms-powerpoint",
+        Some("pptx") => {
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        }
+        Some("zip") => "application/zip",
+        Some("mp3") => "audio/mpeg",
+        Some("mp4") => "video/mp4",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+/// Lit un fichier déposé (drag-and-drop Tauri → chemins OS) pour l’upload Gestion.
+#[tauri::command]
+pub fn read_dropped_file(path: String) -> Result<DroppedFilePayload, String> {
+    use base64::Engine;
+    let path = std::path::PathBuf::from(path.trim());
+    if !path.is_file() {
+        return Err("Ce n’est pas un fichier".into());
+    }
+    let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
+    if meta.len() > 25 * 1024 * 1024 {
+        return Err("Fichier trop volumineux (max 25 Mo)".into());
+    }
+    if meta.len() == 0 {
+        return Err("Fichier vide".into());
+    }
+    let bytes = fs::read(&path).map_err(|e| format!("lecture: {e}"))?;
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "Nom de fichier manquant".to_string())?
+        .to_string();
+    Ok(DroppedFilePayload {
+        mime: mime_from_path(&path),
+        data_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+        size: bytes.len() as u64,
+        filename,
+    })
+}
+
 /// Dépose un fichier dans le workspace Gestion (bureau ou projet).
 #[tauri::command]
 pub async fn gestion_upload_file(

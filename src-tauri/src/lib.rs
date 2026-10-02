@@ -125,6 +125,7 @@ pub fn run() {
             windows::gestion::gestion_migrate_local_tasks,
             windows::gestion::gestion_tasks_backend_active,
             windows::gestion::gestion_sync_now,
+            windows::gestion::read_dropped_file,
             windows::gestion::gestion_upload_file,
             windows::postit::create_scratch_postit,
             windows::postit::postit_open_for_note,

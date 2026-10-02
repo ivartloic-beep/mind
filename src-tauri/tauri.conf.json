@@ -32,7 +32,8 @@
         "decorations": false,
         "skipTaskbar": true,
         "alwaysOnTop": false,
-        "shadow": false
+        "shadow": false,
+        "dragDropEnabled": true
       },
       {
         "label": "capture",

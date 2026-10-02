@@ -82,6 +82,18 @@ export type GestionUploadReport = {
   elementId?: string | null;
 };
 
+export type DroppedFilePayload = {
+  filename: string;
+  mime: string;
+  dataBase64: string;
+  size: number;
+};
+
+/** Lit un fichier OS déposé (chemins Tauri drag-drop). */
+export function readDroppedFile(path: string): Promise<DroppedFilePayload> {
+  return invoke<DroppedFilePayload>("read_dropped_file", { path });
+}
+
 /** Dépose un fichier dans le workspace Gestion (bureau personal ou projet team). */
 export function gestionUploadFile(args: {
   filename: string;
