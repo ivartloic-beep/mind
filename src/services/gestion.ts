@@ -36,6 +36,71 @@ export function gestionShowTask(taskId: string): Promise<void> {
   return invoke("gestion_show_task", { taskId });
 }
 
+/** Ouvre une note / idée workspace dans Gestion. */
+export function gestionShowNote(
+  noteId: string,
+  projectId?: string | null,
+): Promise<void> {
+  return invoke("gestion_show_note", {
+    noteId,
+    projectId: projectId ?? null,
+  });
+}
+
+/** Ouvre la fiche prospect CRM. */
+export function gestionShowProspect(prospectId: string): Promise<void> {
+  return invoke("gestion_show_prospect", { prospectId });
+}
+
+export type GestionProspectReport = {
+  prospectId: string;
+};
+
+/** Crée un prospect CRM express (nom + organisme + tél/mail). */
+export function gestionCreateProspect(args: {
+  name: string;
+  organisme?: string | null;
+  contact?: string | null;
+}): Promise<GestionProspectReport> {
+  return invoke<GestionProspectReport>("gestion_create_prospect", {
+    name: args.name,
+    organisme: args.organisme ?? null,
+    contact: args.contact ?? null,
+  });
+}
+
+export type GestionAttachReport = {
+  taskId: string;
+  filename: string;
+  fileId: string;
+};
+
+/** Attache un fichier (base64) comme PJ d’une tâche. */
+export function gestionAttachFileToTask(args: {
+  taskId: string;
+  filename: string;
+  mime?: string | null;
+  dataBase64: string;
+}): Promise<GestionAttachReport> {
+  return invoke<GestionAttachReport>("gestion_attach_file_to_task", {
+    taskId: args.taskId,
+    filename: args.filename,
+    mime: args.mime ?? null,
+    dataBase64: args.dataBase64,
+  });
+}
+
+/** Attache un fichier OS comme PJ d’une tâche. */
+export function gestionAttachFilePathToTask(args: {
+  taskId: string;
+  path: string;
+}): Promise<GestionAttachReport> {
+  return invoke<GestionAttachReport>("gestion_attach_file_path_to_task", {
+    taskId: args.taskId,
+    path: args.path,
+  });
+}
+
 export function gestionGetConfig(): Promise<GestionConfig> {
   return invoke<GestionConfig>("gestion_get_config");
 }

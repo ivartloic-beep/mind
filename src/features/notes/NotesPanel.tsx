@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createNote, deleteNote, upsertNote } from "../../services/api";
+import { gestionShowNote } from "../../services/gestion";
 import type { Note, Project } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 
@@ -147,6 +148,7 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
                   type="button"
                   className="notes-item"
                   disabled={busy}
+                  title="Éditer ici — double usage : Gestion via le bouton →"
                   onClick={() => {
                     setCreating(false);
                     setSelectedId(note.id);
@@ -162,6 +164,16 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
                   {note.title?.trim() ? (
                     <span className="notes-item-preview">{preview(note.body)}</span>
                   ) : null}
+                </button>
+                <button
+                  type="button"
+                  className="notes-open-gestion"
+                  disabled={busy}
+                  aria-label="Ouvrir dans Gestion"
+                  title="Ouvrir dans Gestion"
+                  onClick={() => void gestionShowNote(note.id, note.projectId)}
+                >
+                  →
                 </button>
                 <button
                   type="button"
@@ -225,14 +237,27 @@ export function NotesPanel({ notes, projects, loadState, error }: Props) {
               {creating ? "Annuler" : "Fermer"}
             </button>
             {!creating && selected && (
-              <button
-                type="button"
-                className="notes-cancel-btn notes-delete-btn"
-                disabled={saving || deletingId !== null}
-                onClick={() => void remove(selected)}
-              >
-                {deletingId === selected.id ? "…" : "Supprimer"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="notes-cancel-btn"
+                  disabled={saving || deletingId !== null}
+                  title="Ouvrir dans Gestion"
+                  onClick={() =>
+                    void gestionShowNote(selected.id, selected.projectId)
+                  }
+                >
+                  Gestion
+                </button>
+                <button
+                  type="button"
+                  className="notes-cancel-btn notes-delete-btn"
+                  disabled={saving || deletingId !== null}
+                  onClick={() => void remove(selected)}
+                >
+                  {deletingId === selected.id ? "…" : "Supprimer"}
+                </button>
+              </>
             )}
           </div>
           {saveError && <p className="panel-error">{saveError}</p>}

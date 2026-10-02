@@ -84,6 +84,14 @@
   max-width: 28ch;
 }
 
+.panel-gestion-status-row {
+  margin: 0.35rem 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.55rem;
+}
+
 .panel-gestion-status {
   margin: 0.35rem 0 0;
   font-size: 0.72rem;
@@ -95,12 +103,50 @@
   gap: 0.2rem;
 }
 
+.panel-gestion-status-row .panel-gestion-status {
+  margin: 0;
+}
+
 .panel-gestion-status.is-connected {
   color: color-mix(in srgb, var(--accent-strong) 85%, var(--fg));
 }
 
 .panel-gestion-status.is-connected.is-warn {
   color: color-mix(in srgb, #b45309 70%, var(--fg));
+}
+
+.panel-sync-pill {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  padding: 0.18rem 0.55rem;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.panel-sync-pill:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  border-color: var(--accent);
+}
+
+.panel-sync-pill.is-warn {
+  border-color: color-mix(in srgb, #b45309 45%, var(--border));
+  background: color-mix(in srgb, #b45309 12%, var(--surface));
+  color: #92400e;
+}
+
+.panel-sync-pill.is-busy,
+.panel-sync-pill:disabled {
+  opacity: 0.65;
+  cursor: wait;
 }
 
 .panel-settings-btn {
@@ -1051,6 +1097,56 @@
   align-self: center;
 }
 
+.notes-open-gestion {
+  appearance: none;
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.35rem 0.4rem;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    opacity 140ms ease,
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.notes-open-gestion:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.notes-open-gestion:disabled {
+  opacity: 0.25;
+  cursor: wait;
+}
+
+.contact-express {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+}
+
+.contact-express-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.contact-express-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .notes-delete-btn {
   margin-left: auto;
   color: #b42318;
@@ -1262,6 +1358,10 @@
   border-color: var(--accent);
   color: var(--accent-strong);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.drop-task-select {
+  width: 100%;
 }
 
 .drop-sheet-actions {

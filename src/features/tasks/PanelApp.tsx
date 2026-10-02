@@ -70,6 +70,7 @@ import {
 } from "../../stores/ui-store";
 import type { Task } from "../../types/models";
 import { isTaskOpen } from "../../types/models";
+import { ContactExpress } from "../panel/ContactExpress";
 import { DropZone } from "../panel/DropZone";
 import { ReminderDueBanner } from "../reminders/ReminderDueBanner";
 import { TimerPanel } from "../timer/TimerPanel";
@@ -77,6 +78,19 @@ import "./panel.css";
 
 type LoadState = "loading" | "ready" | "error";
 type PanelMode = "day" | "capture" | "timer";
+
+function formatSyncAgo(iso: string | null): string {
+  if (!iso) return "jamais";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "à l’instant";
+  const sec = Math.round(ms / 1000);
+  if (sec < 45) return "à l’instant";
+  if (sec < 90) return "il y a 1 min";
+  const min = Math.round(sec / 60);
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.round(min / 60);
+  return `il y a ${h} h`;
+}
 
 export function PanelApp() {
   const [open, setOpen] = useState(true);
@@ -111,6 +125,11 @@ export function PanelApp() {
   const [cloudEdit, setCloudEdit] = useState(false);
   const [panelMode, setPanelMode] = useState<PanelMode>("day");
   const [showDropInCapture, setShowDropInCapture] = useState(false);
+  const [showContactExpress, setShowContactExpress] = useState(false);
+  const [lastGestionSyncAt, setLastGestionSyncAt] = useState<string | null>(
+    null,
+  );
+  const [gestionSyncBusy, setGestionSyncBusy] = useState(false);
   const [, startTransition] = useTransition();
   const gestionLoggedInRef = useRef(false);
   const dayQueue = pickDayQueue(tasks, 4);
@@ -141,11 +160,26 @@ export function PanelApp() {
     if (!gestionLoggedInRef.current) return;
     try {
       await gestionSyncNow();
+      setLastGestionSyncAt(new Date().toISOString());
       await refresh();
     } catch {
       /* ignore — lastError via prefs */
     }
   }, [refresh]);
+
+  async function handleGestionSyncClick() {
+    if (!gestionLoggedIn || gestionSyncBusy) return;
+    setGestionSyncBusy(true);
+    try {
+      await gestionSyncNow();
+      setLastGestionSyncAt(new Date().toISOString());
+      await refresh();
+    } catch {
+      await refresh();
+    } finally {
+      setGestionSyncBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -652,6 +686,7 @@ export function PanelApp() {
                           setGestionMsg(null);
                           try {
                             const report = await gestionSyncNow();
+                            setLastGestionSyncAt(new Date().toISOString());
                             setGestionMsg(
                               report.active
                                 ? `Sync OK — ${report.tasks} tâches, ${report.projects} projets, ${report.notes} notes`
@@ -797,6 +832,7 @@ export function PanelApp() {
                               "Connecté — sync tâches, projets et notes",
                             );
                             await gestionSyncNow();
+                            setLastGestionSyncAt(new Date().toISOString());
                             await listProjects();
                             await refresh();
                           } catch (err) {
@@ -854,17 +890,37 @@ export function PanelApp() {
               </div>
               <p>Capturer d&apos;abord, organiser ensuite.</p>
               {gestionLoggedIn ? (
-                <p
-                  className={`panel-gestion-status is-connected${gestionLastError ? " is-warn" : ""}`}
-                  title={
-                    gestionLastError
-                      ? gestionLastError
-                      : gestionUser || undefined
-                  }
-                >
-                  Gestion · connecté{gestionUser ? ` — ${gestionUser}` : ""}
-                  {gestionLastError ? " · sync à revoir" : ""}
-                </p>
+                <div className="panel-gestion-status-row">
+                  <p
+                    className={`panel-gestion-status is-connected${gestionLastError ? " is-warn" : ""}`}
+                    title={
+                      gestionLastError
+                        ? gestionLastError
+                        : gestionUser || undefined
+                    }
+                  >
+                    Gestion · connecté{gestionUser ? ` — ${gestionUser}` : ""}
+                  </p>
+                  <button
+                    type="button"
+                    className={`panel-sync-pill${gestionLastError ? " is-warn" : ""}${gestionSyncBusy ? " is-busy" : ""}`}
+                    title={
+                      gestionLastError
+                        ? `${gestionLastError} — cliquer pour synchroniser`
+                        : "Synchroniser maintenant"
+                    }
+                    disabled={gestionSyncBusy}
+                    onClick={() => void handleGestionSyncClick()}
+                  >
+                    {gestionSyncBusy
+                      ? "Sync…"
+                      : gestionLastError
+                        ? "Erreur · réessayer"
+                        : lastGestionSyncAt
+                          ? `OK · ${formatSyncAgo(lastGestionSyncAt)}`
+                          : "OK · sync"}
+                  </button>
+                </div>
               ) : (
                 <p className="panel-gestion-status">
                   Gestion hors ligne —{" "}
@@ -1042,6 +1098,7 @@ export function PanelApp() {
 
                 <DropZone
                   loggedIn={gestionLoggedIn}
+                  dayTasks={dayQueue}
                   onNeedLogin={() => setSettingsOpen(true)}
                   onSessionResolved={(ok) => {
                     setGestionLoggedIn(ok);
@@ -1054,68 +1111,87 @@ export function PanelApp() {
             {panelMode === "capture" && (
               <section className="panel-section panel-section-grow panel-capture-mode">
                 <h2>Capturer</h2>
-                <p className="panel-muted">
-                  Tâche / note / idée → Capture. CRM → Gestion. Fichier → dépôt.
-                </p>
-                <div className="panel-capture-grid" role="group" aria-label="Type">
-                  <button
-                    type="button"
-                    className="panel-action-btn is-primary"
-                    onClick={() => {
-                      setShowDropInCapture(false);
-                      void captureShowKind("task");
-                    }}
-                  >
-                    Tâche
-                  </button>
-                  <button
-                    type="button"
-                    className="panel-action-btn"
-                    onClick={() => {
-                      setShowDropInCapture(false);
-                      void captureShowKind("note");
-                    }}
-                  >
-                    Note
-                  </button>
-                  <button
-                    type="button"
-                    className="panel-action-btn"
-                    onClick={() => {
-                      setShowDropInCapture(false);
-                      void captureShowKind("idea");
-                    }}
-                  >
-                    Idée
-                  </button>
-                  <button
-                    type="button"
-                    className="panel-action-btn"
-                    title="Ouvre le CRM Gestion (création contact express bientôt)"
-                    onClick={() => {
-                      setShowDropInCapture(false);
-                      void gestionShowPage("crm");
-                    }}
-                  >
-                    CRM
-                  </button>
-                  <button
-                    type="button"
-                    className="panel-action-btn"
-                    onClick={() => setShowDropInCapture(true)}
-                  >
-                    Fichier
-                  </button>
-                </div>
-                {showDropInCapture && (
-                  <DropZone
+                {showContactExpress ? (
+                  <ContactExpress
                     loggedIn={gestionLoggedIn}
                     onNeedLogin={() => setSettingsOpen(true)}
-                    onSessionResolved={(ok) => {
-                      setGestionLoggedIn(ok);
-                      gestionLoggedInRef.current = ok;
-                    }}
+                    onClose={() => setShowContactExpress(false)}
                   />
+                ) : (
+                  <>
+                    <p className="panel-muted">
+                      Tâche / note / idée → Capture. Contact → CRM. Fichier →
+                      dépôt.
+                    </p>
+                    <div
+                      className="panel-capture-grid"
+                      role="group"
+                      aria-label="Type"
+                    >
+                      <button
+                        type="button"
+                        className="panel-action-btn is-primary"
+                        onClick={() => {
+                          setShowDropInCapture(false);
+                          void captureShowKind("task");
+                        }}
+                      >
+                        Tâche
+                      </button>
+                      <button
+                        type="button"
+                        className="panel-action-btn"
+                        onClick={() => {
+                          setShowDropInCapture(false);
+                          void captureShowKind("note");
+                        }}
+                      >
+                        Note
+                      </button>
+                      <button
+                        type="button"
+                        className="panel-action-btn"
+                        onClick={() => {
+                          setShowDropInCapture(false);
+                          void captureShowKind("idea");
+                        }}
+                      >
+                        Idée
+                      </button>
+                      <button
+                        type="button"
+                        className="panel-action-btn"
+                        title="Créer un contact CRM en 3 champs"
+                        onClick={() => {
+                          setShowDropInCapture(false);
+                          setShowContactExpress(true);
+                        }}
+                      >
+                        Contact
+                      </button>
+                      <button
+                        type="button"
+                        className="panel-action-btn"
+                        onClick={() => {
+                          setShowContactExpress(false);
+                          setShowDropInCapture(true);
+                        }}
+                      >
+                        Fichier
+                      </button>
+                    </div>
+                    {showDropInCapture && (
+                      <DropZone
+                        loggedIn={gestionLoggedIn}
+                        dayTasks={dayQueue}
+                        onNeedLogin={() => setSettingsOpen(true)}
+                        onSessionResolved={(ok) => {
+                          setGestionLoggedIn(ok);
+                          gestionLoggedInRef.current = ok;
+                        }}
+                      />
+                    )}
+                  </>
                 )}
               </section>
             )}
@@ -1156,7 +1232,10 @@ export function PanelApp() {
                   aria-current={panelMode === id ? "page" : undefined}
                   onClick={() => {
                     setPanelMode(id);
-                    if (id !== "capture") setShowDropInCapture(false);
+                    if (id !== "capture") {
+                      setShowDropInCapture(false);
+                      setShowContactExpress(false);
+                    }
                   }}
                 >
                   {label}

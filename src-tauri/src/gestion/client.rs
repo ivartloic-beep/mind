@@ -1198,6 +1198,211 @@ impl GestionClient {
         }
         Ok(parsed)
     }
+
+    /// Upload générique (`upload.php`) — PJ tâche, etc.
+    pub async fn upload_generic_file(
+        &self,
+        filename: &str,
+        mime: Option<&str>,
+        bytes: Vec<u8>,
+        kind: &str,
+    ) -> Result<Value, String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("upload.php");
+        let safe_name = {
+            let cleaned: String = filename
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' ') {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let t = cleaned.trim().trim_matches('.');
+            if t.is_empty() {
+                "fichier.bin".to_string()
+            } else {
+                t.to_string()
+            }
+        };
+        let mime_clean = {
+            let m = mime.unwrap_or("application/octet-stream").trim();
+            if m.is_empty() || !m.is_ascii() || m.bytes().any(|b| b <= 32) {
+                "application/octet-stream".to_string()
+            } else {
+                m.to_string()
+            }
+        };
+        let file_part = reqwest::multipart::Part::bytes(bytes)
+            .file_name(safe_name.clone())
+            .mime_str(&mime_clean)
+            .map_err(|e| format!("mime: {e}"))?;
+        let form = reqwest::multipart::Form::new()
+            .text("type", kind.to_string())
+            .text("token", raw.clone())
+            .part("file", file_part);
+        let res = self
+            .http
+            .post(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .multipart(form)
+            .timeout(std::time::Duration::from_secs(120))
+            .send()
+            .await
+            .map_err(|e| format!("réseau upload: {e}"))?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("upload.php HTTP {status}: {text}"));
+        }
+        let parsed: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        if parsed.get("success").and_then(|s| s.as_bool()) == Some(false)
+            || parsed.get("file_id").and_then(|v| v.as_str()).is_none()
+        {
+            let err = parsed
+                .get("error")
+                .and_then(|e| e.as_str())
+                .unwrap_or("échec upload");
+            return Err(err.to_string());
+        }
+        Ok(parsed)
+    }
+
+    /// Crée un prospect CRM express (liste par défaut ou « MIND »).
+    pub async fn create_prospect_express(
+        &self,
+        contact_name: &str,
+        organisme: Option<&str>,
+        phone_or_email: Option<&str>,
+    ) -> Result<String, String> {
+        let name = contact_name.trim();
+        if name.is_empty() {
+            return Err("Nom du contact requis".into());
+        }
+        let (bearer, raw) = self.auth_headers()?;
+        let get_url = format!("{}?token={}", self.url("crm.php"), urlencoding_lite(&raw));
+        let res = self
+            .http
+            .get(&get_url)
+            .header(AUTHORIZATION, &bearer)
+            .header("X-Auth-Token", &raw)
+            .send()
+            .await
+            .map_err(|e| format!("CRM GET: {e}"))?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("CRM GET HTTP {status}"));
+        }
+        let mut parsed: Value =
+            serde_json::from_str(&text).map_err(|e| format!("CRM JSON: {e}"))?;
+        let prospect_id = {
+            let crm = parsed
+                .get_mut("crm")
+                .filter(|c| c.is_object())
+                .ok_or_else(|| "Réponse CRM sans objet".to_string())?;
+
+            if crm.get("lists").and_then(|l| l.as_array()).is_none() {
+                crm.as_object_mut()
+                    .unwrap()
+                    .insert("lists".into(), Value::Array(vec![]));
+            }
+            let lists = crm.get_mut("lists").and_then(|l| l.as_array_mut()).unwrap();
+            if lists.is_empty() {
+                lists.push(serde_json::json!({
+                    "id": format!("list_mind_{}", crate::domain::new_id()),
+                    "name": "MIND",
+                    "prospects": [],
+                    "createdAt": crate::domain::now_iso(),
+                }));
+            }
+            let list = lists
+                .get_mut(0)
+                .ok_or_else(|| "Liste CRM introuvable".to_string())?;
+            let list_id = list
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("list_mind")
+                .to_string();
+            if list.get("prospects").and_then(|p| p.as_array()).is_none() {
+                list.as_object_mut()
+                    .unwrap()
+                    .insert("prospects".into(), Value::Array(vec![]));
+            }
+
+            let contact = phone_or_email.map(str::trim).filter(|s| !s.is_empty());
+            let (email, tel) = match contact {
+                Some(c) if c.contains('@') => (Some(c.to_string()), None),
+                Some(c) => (None, Some(c.to_string())),
+                None => (None, None),
+            };
+            let parts: Vec<&str> = name.split_whitespace().collect();
+            let (prenom, nom) = if parts.len() >= 2 {
+                (parts[0].to_string(), parts[1..].join(" "))
+            } else {
+                (String::new(), name.to_string())
+            };
+            let org = organisme.map(str::trim).filter(|s| !s.is_empty());
+            let prospect_id = format!("prosp_{}", crate::domain::new_id());
+            let prospect = serde_json::json!({
+                "id": prospect_id.clone(),
+                "contactPrenom": prenom,
+                "contactNom": nom,
+                "organisme": org.unwrap_or(""),
+                "email": email.unwrap_or_default(),
+                "tel": tel.clone().unwrap_or_default(),
+                "telFixe": "",
+                "telMobile": tel.unwrap_or_default(),
+                "notes": "",
+                "tags": {},
+                "activities": [],
+                "listIds": [list_id],
+                "createdAt": crate::domain::now_iso(),
+                "followUpDate": null,
+                "followUpNote": "",
+            });
+            list.get_mut("prospects")
+                .and_then(|p| p.as_array_mut())
+                .unwrap()
+                .push(prospect);
+            prospect_id
+        };
+
+        let crm_payload = parsed
+            .get("crm")
+            .cloned()
+            .ok_or_else(|| "CRM payload manquant".to_string())?;
+        let post_url = self.url("crm.php");
+        let body = serde_json::json!({ "crm": crm_payload, "token": raw });
+        let res = self
+            .http
+            .post(&post_url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("CRM POST: {e}"))?;
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("CRM POST HTTP {status}: {text}"));
+        }
+        Ok(prospect_id)
+    }
 }
 
 fn filename_from_content_disposition(header: &str) -> Option<String> {

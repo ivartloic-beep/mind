@@ -1,5 +1,5 @@
 /**
- * Zone déposer → workspace Gestion (bureau ou projet).
+ * Zone déposer → workspace Gestion (bureau / projet) ou PJ tâche.
  * Drag-and-drop OS via events Tauri (HTML5 DnD ne reçoit pas les drops Windows).
  */
 
@@ -8,6 +8,8 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listProjects } from "../../services/api";
 import {
   formatInvokeError,
+  gestionAttachFilePathToTask,
+  gestionAttachFileToTask,
   gestionEnsureSession,
   gestionGetConfig,
   gestionTasksBackendActive,
@@ -16,7 +18,7 @@ import {
   isGestionLoggedIn,
   peekDroppedFile,
 } from "../../services/gestion";
-import type { Project } from "../../types/models";
+import type { Project, Task } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 
 type PendingFile = {
@@ -28,11 +30,15 @@ type PendingFile = {
   osPath?: string;
 };
 
+type Dest = "bureau" | "project" | "task";
+
 type Props = {
   /** Indication UI — la session est toujours re-vérifiée au dépôt. */
   loggedIn: boolean;
   onNeedLogin: () => void;
   onSessionResolved?: (loggedIn: boolean) => void;
+  /** Tâches de la file du jour — destination PJ optionnelle. */
+  dayTasks?: Task[];
 };
 
 function inTauri(): boolean {
@@ -61,7 +67,6 @@ async function sessionIsActive(): Promise<boolean> {
   } catch {
     /* continue */
   }
-  // La session peut être dans la fenêtre Gestion (site) sans être encore dans les prefs panneau.
   try {
     const cfg = await gestionEnsureSession();
     if (isGestionLoggedIn(cfg)) return true;
@@ -76,11 +81,17 @@ async function sessionIsActive(): Promise<boolean> {
   }
 }
 
-export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
+export function DropZone({
+  loggedIn,
+  onNeedLogin,
+  onSessionResolved,
+  dayTasks = [],
+}: Props) {
   const [dragging, setDragging] = useState(false);
   const [pending, setPending] = useState<PendingFile | null>(null);
-  const [dest, setDest] = useState<"bureau" | "project">("bureau");
+  const [dest, setDest] = useState<Dest>("bureau");
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -92,6 +103,12 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       .then(setProjects)
       .catch(() => setProjects([]));
   }, [pending]);
+
+  const resetDest = useCallback(() => {
+    setDest("bureau");
+    setProjectId(null);
+    setTaskId(dayTasks[0]?.id ?? null);
+  }, [dayTasks]);
 
   const beginPending = useCallback(
     async (next: PendingFile) => {
@@ -114,13 +131,12 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
         }
         setNeedsLogin(false);
         setPending(next);
-        setDest("bureau");
-        setProjectId(null);
+        resetDest();
       } finally {
         setBusy(false);
       }
     },
-    [loggedIn, onSessionResolved],
+    [loggedIn, onSessionResolved, resetDest],
   );
 
   const takeFiles = useCallback(
@@ -154,7 +170,6 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
           return;
         }
         setNeedsLogin(false);
-        // Métadonnées légères pour l’UI ; l’envoi utilisera le chemin OS.
         const meta = await peekDroppedFile(path);
         setPending({
           name: meta.filename,
@@ -163,18 +178,16 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
           size: meta.size,
           osPath: meta.path || path,
         });
-        setDest("bureau");
-        setProjectId(null);
+        resetDest();
       } catch (err) {
         setError(formatInvokeError(err, "Lecture du fichier impossible."));
       } finally {
         setBusy(false);
       }
     },
-    [loggedIn, onSessionResolved],
+    [loggedIn, onSessionResolved, resetDest],
   );
 
-  // Drag-and-drop natif Tauri (Explorer → panneau Windows).
   useEffect(() => {
     if (!inTauri()) return;
     let cancelled = false;
@@ -213,29 +226,50 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       setError("Choisis un projet.");
       return;
     }
+    if (dest === "task" && !taskId) {
+      setError("Choisis une tâche.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setMsg(null);
-    const visibility = dest === "bureau" ? "personal" : "team";
     try {
-      const report = pending.osPath
-        ? await gestionUploadFilePath({
-            path: pending.osPath,
-            visibility,
-            projectId: dest === "project" ? projectId : null,
-          })
-        : await gestionUploadFile({
-            filename: pending.name,
-            mime: pending.mime,
-            dataBase64: pending.base64,
-            visibility,
-            projectId: dest === "project" ? projectId : null,
-          });
-      setMsg(
-        dest === "bureau"
-          ? `Déposé dans le bureau — ${report.filename}`
-          : `Déposé dans le projet — ${report.filename}`,
-      );
+      if (dest === "task" && taskId) {
+        const report = pending.osPath
+          ? await gestionAttachFilePathToTask({
+              taskId,
+              path: pending.osPath,
+            })
+          : await gestionAttachFileToTask({
+              taskId,
+              filename: pending.name,
+              mime: pending.mime,
+              dataBase64: pending.base64,
+            });
+        const taskTitle =
+          dayTasks.find((t) => t.id === taskId)?.title ?? "tâche";
+        setMsg(`PJ ajoutée à « ${taskTitle} » — ${report.filename}`);
+      } else {
+        const visibility = dest === "bureau" ? "personal" : "team";
+        const report = pending.osPath
+          ? await gestionUploadFilePath({
+              path: pending.osPath,
+              visibility,
+              projectId: dest === "project" ? projectId : null,
+            })
+          : await gestionUploadFile({
+              filename: pending.name,
+              mime: pending.mime,
+              dataBase64: pending.base64,
+              visibility,
+              projectId: dest === "project" ? projectId : null,
+            });
+        setMsg(
+          dest === "bureau"
+            ? `Déposé dans le bureau — ${report.filename}`
+            : `Déposé dans le projet — ${report.filename}`,
+        );
+      }
       setPending(null);
     } catch (err) {
       setError(formatInvokeError(err, "Envoi impossible"));
@@ -243,6 +277,12 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
       setBusy(false);
     }
   }
+
+  const canConfirm =
+    !busy &&
+    (dest === "bureau" ||
+      (dest === "project" && !!projectId) ||
+      (dest === "task" && !!taskId));
 
   return (
     <section className="drop-zone-block" aria-label="Déposer un fichier">
@@ -269,7 +309,7 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
         >
           <p className="drop-zone-title">Déposer un fichier</p>
           <p className="drop-zone-hint">
-            Glisse-dépose ici, ou choisis — Bureau / projet Gestion
+            Bureau, projet, ou pièce jointe sur une tâche
           </p>
           <label className="drop-zone-browse">
             Choisir
@@ -306,6 +346,22 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
             >
               Projet
             </button>
+            <button
+              type="button"
+              className={`drop-dest-btn ${dest === "task" ? "is-active" : ""}`}
+              disabled={busy || dayTasks.length === 0}
+              title={
+                dayTasks.length === 0
+                  ? "Aucune tâche dans la file du jour"
+                  : "Pièce jointe sur une tâche"
+              }
+              onClick={() => {
+                setDest("task");
+                if (!taskId) setTaskId(dayTasks[0]?.id ?? null);
+              }}
+            >
+              Tâche
+            </button>
           </div>
           {dest === "project" && (
             <ProjectSelect
@@ -316,11 +372,26 @@ export function DropZone({ loggedIn, onNeedLogin, onSessionResolved }: Props) {
               ariaLabel="Projet destination"
             />
           )}
+          {dest === "task" && dayTasks.length > 0 && (
+            <select
+              className="panel-input drop-task-select"
+              value={taskId ?? ""}
+              disabled={busy}
+              aria-label="Tâche destination"
+              onChange={(e) => setTaskId(e.target.value || null)}
+            >
+              {dayTasks.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="drop-sheet-actions">
             <button
               type="button"
               className="panel-action-btn is-primary"
-              disabled={busy || (dest === "project" && !projectId)}
+              disabled={!canConfirm}
               onClick={() => void confirmUpload()}
             >
               {busy ? "Envoi…" : "Déposer"}

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use url::Url;
@@ -1018,6 +1019,18 @@ pub fn gestion_show_page(app: AppHandle, page: String) -> Result<(), String> {
     Ok(())
 }
 
+fn eval_retry(window: &WebviewWindow, js: String) {
+    let win = window.clone();
+    let js2 = js.clone();
+    let _ = window.eval(&js);
+    std::thread::spawn(move || {
+        for delay in [400u64, 1000, 2000, 3500] {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            let _ = win.eval(&js2);
+        }
+    });
+}
+
 /// Ouvre Gestion sur la fiche tâche (documents, notes, activités… comme le bureau).
 #[tauri::command]
 pub fn gestion_show_task(app: AppHandle, task_id: String) -> Result<(), String> {
@@ -1046,16 +1059,314 @@ pub fn gestion_show_task(app: AppHandle, task_id: String) -> Result<(), String> 
 }})();"#,
         id = escaped
     );
-    let win = window.clone();
-    let js2 = js.clone();
-    let _ = window.eval(&js);
-    std::thread::spawn(move || {
-        for delay in [400u64, 1000, 2000, 3500] {
-            std::thread::sleep(std::time::Duration::from_millis(delay));
-            let _ = win.eval(&js2);
-        }
-    });
+    eval_retry(&window, js);
     Ok(())
+}
+
+/// Ouvre une note / idée workspace dans Gestion (bureau ou projet).
+#[tauri::command]
+pub fn gestion_show_note(
+    app: AppHandle,
+    note_id: String,
+    project_id: Option<String>,
+) -> Result<(), String> {
+    let note_id = note_id.trim().to_string();
+    if note_id.is_empty() {
+        return Err("note_id vide".into());
+    }
+    show_gestion(&app)?;
+    let window = app
+        .get_webview_window(GESTION_LABEL)
+        .ok_or_else(|| "fenêtre Gestion introuvable".to_string())?;
+    let eid = note_id.replace('\\', "\\\\").replace('\'', "\\'");
+    let pid = project_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.replace('\\', "\\\\").replace('\'', "\\'"));
+    let js = if let Some(pid) = pid {
+        format!(
+            r#"(function(){{
+  var eid = '{eid}';
+  var pid = '{pid}';
+  function tryOpen(n) {{
+    try {{
+      var go = function() {{
+        if (typeof openWorkspaceElement === 'function') {{
+          openWorkspaceElement(eid);
+          return true;
+        }}
+        return false;
+      }};
+      if (typeof openWorkProjectPage === 'function') {{
+        Promise.resolve(openWorkProjectPage(pid, {{ tab: 'notes' }})).then(function(){{
+          setTimeout(go, 400);
+        }}).catch(function(){{ go(); }});
+        return;
+      }}
+      if (go()) return;
+    }} catch (e) {{}}
+    if (n < 48) setTimeout(function(){{ tryOpen(n + 1); }}, 250);
+  }}
+  tryOpen(0);
+}})();"#,
+            eid = eid,
+            pid = pid
+        )
+    } else {
+        format!(
+            r#"(function(){{
+  var eid = '{eid}';
+  function tryOpen(n) {{
+    try {{
+      var go = function() {{
+        if (typeof openWorkspaceElement === 'function') {{
+          openWorkspaceElement(eid);
+          return true;
+        }}
+        return false;
+      }};
+      if (typeof openMyBureauPage === 'function') {{
+        Promise.resolve(openMyBureauPage()).then(function(){{
+          setTimeout(go, 400);
+        }}).catch(function(){{ go(); }});
+        return;
+      }}
+      if (go()) return;
+    }} catch (e) {{}}
+    if (n < 48) setTimeout(function(){{ tryOpen(n + 1); }}, 250);
+  }}
+  tryOpen(0);
+}})();"#,
+            eid = eid
+        )
+    };
+    eval_retry(&window, js);
+    Ok(())
+}
+
+/// Ouvre la fiche prospect CRM dans Gestion.
+#[tauri::command]
+pub fn gestion_show_prospect(app: AppHandle, prospect_id: String) -> Result<(), String> {
+    let prospect_id = prospect_id.trim().to_string();
+    if prospect_id.is_empty() {
+        return Err("prospect_id vide".into());
+    }
+    show_gestion(&app)?;
+    let window = app
+        .get_webview_window(GESTION_LABEL)
+        .ok_or_else(|| "fenêtre Gestion introuvable".to_string())?;
+    let escaped = prospect_id.replace('\\', "\\\\").replace('\'', "\\'");
+    let js = format!(
+        r#"(function(){{
+  var id = '{id}';
+  function tryOpen(n) {{
+    try {{
+      if (typeof openCrmPage === 'function') {{
+        Promise.resolve(openCrmPage()).then(function(){{
+          setTimeout(function(){{
+            if (typeof openCrmProspectFiche === 'function') openCrmProspectFiche(id);
+            else if (typeof editCrmProspect === 'function') editCrmProspect(id);
+          }}, 500);
+        }}).catch(function(){{}});
+        return;
+      }}
+      if (typeof openCrmProspectFiche === 'function') {{
+        openCrmProspectFiche(id);
+        return;
+      }}
+    }} catch (e) {{}}
+    if (n < 48) setTimeout(function(){{ tryOpen(n + 1); }}, 250);
+  }}
+  tryOpen(0);
+}})();"#,
+        id = escaped
+    );
+    eval_retry(&window, js);
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestionProspectReport {
+    pub prospect_id: String,
+}
+
+/// Crée un prospect CRM express (3 champs).
+#[tauri::command]
+pub async fn gestion_create_prospect(
+    app: AppHandle,
+    name: String,
+    organisme: Option<String>,
+    contact: Option<String>,
+) -> Result<GestionProspectReport, String> {
+    if crate::gestion::try_client(&app).is_none() {
+        let _ = gestion_ensure_session(app.clone()).await?;
+    }
+    let client = crate::gestion::try_client(&app)
+        .ok_or_else(|| "Session Gestion absente — ⚙ Paramètres → Se connecter".to_string())?;
+    let id = client
+        .create_prospect_express(
+            &name,
+            organisme.as_deref(),
+            contact.as_deref(),
+        )
+        .await?;
+    Ok(GestionProspectReport { prospect_id: id })
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GestionAttachReport {
+    pub task_id: String,
+    pub filename: String,
+    pub file_id: String,
+}
+
+async fn attach_bytes_to_task(
+    app: &AppHandle,
+    task_id: &str,
+    filename: &str,
+    mime: Option<&str>,
+    bytes: Vec<u8>,
+) -> Result<GestionAttachReport, String> {
+    if crate::gestion::try_client(app).is_none() {
+        let _ = gestion_ensure_session(app.clone()).await?;
+    }
+    let client = crate::gestion::try_client(app)
+        .ok_or_else(|| "Session Gestion absente — ⚙ Paramètres → Se connecter".to_string())?;
+    let uploaded = client
+        .upload_generic_file(filename, mime, bytes, "documents")
+        .await?;
+    let file_id = uploaded
+        .get("file_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "upload sans file_id".to_string())?
+        .to_string();
+    let file_name = uploaded
+        .get("original_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(filename)
+        .to_string();
+    let file_type = uploaded
+        .get("mime_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or(mime.unwrap_or("application/octet-stream"))
+        .to_string();
+    let file_size = uploaded.get("size").cloned().unwrap_or(Value::Null);
+    let download_url = uploaded
+        .get("url")
+        .and_then(|v| v.as_str())
+        .map(|u| {
+            if u.starts_with("http") {
+                u.to_string()
+            } else {
+                format!(
+                    "{}/{}",
+                    client_base_url(app),
+                    u.trim_start_matches('/')
+                )
+            }
+        })
+        .unwrap_or_else(|| {
+            format!(
+                "{}/download.php?id={}",
+                client_base_url(app),
+                file_id
+            )
+        });
+
+    let state = app.state::<crate::state::AppState>();
+    let mut task = crate::gestion::get_task_hybrid(app, &state, task_id)
+        .await?
+        .ok_or_else(|| format!("Tâche introuvable: {task_id}"))?;
+    let doc_name = std::path::Path::new(&file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&file_name)
+        .to_string();
+    let doc = serde_json::json!({
+        "id": format!("tdoc_{}", crate::domain::new_id()),
+        "name": doc_name,
+        "file_id": file_id.clone(),
+        "url": download_url.clone(),
+        "downloadUrl": download_url,
+        "fileName": file_name.clone(),
+        "fileType": file_type,
+        "fileSize": file_size,
+        "uploadedAt": crate::domain::now_iso(),
+    });
+    task.documents.insert(0, doc);
+    crate::gestion::upsert_task_hybrid(app, &state, task).await?;
+    Ok(GestionAttachReport {
+        task_id: task_id.to_string(),
+        filename: file_name,
+        file_id,
+    })
+}
+
+fn client_base_url(app: &AppHandle) -> String {
+    let prefs = load_prefs(app);
+    prefs.api_url.trim().trim_end_matches('/').to_string()
+}
+
+/// Attache un fichier (base64) comme PJ d’une tâche personal_tasks.
+#[tauri::command]
+pub async fn gestion_attach_file_to_task(
+    app: AppHandle,
+    task_id: String,
+    filename: String,
+    mime: Option<String>,
+    data_base64: String,
+) -> Result<GestionAttachReport, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64.trim())
+        .map_err(|e| format!("base64: {e}"))?;
+    if bytes.is_empty() {
+        return Err("Fichier vide".into());
+    }
+    if bytes.len() > 25 * 1024 * 1024 {
+        return Err("Fichier trop volumineux (max 25 Mo)".into());
+    }
+    attach_bytes_to_task(
+        &app,
+        task_id.trim(),
+        &sanitize_upload_filename(&filename),
+        mime.as_deref(),
+        bytes,
+    )
+    .await
+}
+
+/// Attache un fichier OS comme PJ d’une tâche.
+#[tauri::command]
+pub async fn gestion_attach_file_path_to_task(
+    app: AppHandle,
+    task_id: String,
+    path: String,
+) -> Result<GestionAttachReport, String> {
+    let path_buf = std::path::PathBuf::from(path.trim());
+    if !path_buf.is_file() {
+        return Err("Ce n’est pas un fichier".into());
+    }
+    let meta = fs::metadata(&path_buf).map_err(|e| e.to_string())?;
+    if meta.len() > 25 * 1024 * 1024 {
+        return Err("Fichier trop volumineux (max 25 Mo)".into());
+    }
+    let bytes = fs::read(&path_buf).map_err(|e| format!("lecture: {e}"))?;
+    let filename = path_buf
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("fichier.bin");
+    attach_bytes_to_task(
+        &app,
+        task_id.trim(),
+        &sanitize_upload_filename(filename),
+        Some(&mime_from_path(&path_buf)),
+        bytes,
+    )
+    .await
 }
 
 #[tauri::command]
