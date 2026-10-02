@@ -27,9 +27,10 @@
 
 .timer-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.35rem 0.45rem;
+  gap: 0.3rem;
+  overflow-x: auto;
 }
 
 .timer-duration {

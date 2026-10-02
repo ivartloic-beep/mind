@@ -328,28 +328,6 @@ export function TimerPanel() {
         </div>
 
         <div className="timer-toolbar">
-          <label className="timer-duration">
-            <span>Durée</span>
-            <input
-              type="number"
-              min={1}
-              max={180}
-              value={minutes}
-              disabled={status === "running" || status === "paused"}
-              onChange={(e) => applyMinutes(Number(e.target.value))}
-            />
-            <span>min</span>
-          </label>
-
-          <label className="timer-sound" title="Son à la fin">
-            <input
-              type="checkbox"
-              checked={soundEnabled}
-              onChange={(e) => setSoundEnabled(e.target.checked)}
-            />
-            <span>Son</span>
-          </label>
-
           {status === "running" ? (
             <button type="button" className="timer-btn" onClick={pause}>
               Pause
@@ -380,6 +358,28 @@ export function TimerPanel() {
           >
             Arrêter
           </button>
+
+          <label className="timer-duration">
+            <span>Durée</span>
+            <input
+              type="number"
+              min={1}
+              max={180}
+              value={minutes}
+              disabled={status === "running" || status === "paused"}
+              onChange={(e) => applyMinutes(Number(e.target.value))}
+            />
+            <span>min</span>
+          </label>
+
+          <label className="timer-sound" title="Son à la fin">
+            <input
+              type="checkbox"
+              checked={soundEnabled}
+              onChange={(e) => setSoundEnabled(e.target.checked)}
+            />
+            <span>Son</span>
+          </label>
         </div>
       </div>
       {finishOverlay}

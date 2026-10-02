@@ -1,4 +1,4 @@
-# Ouvrir MIND — exe installe / release, sinon mode dev.
+# Ouvrir MIND — mode dev par defaut (code a jour), sinon exe si npm absent.
 $ErrorActionPreference = "Continue"
 
 function Wait-Key {
@@ -34,10 +34,8 @@ function Find-MindExecutable {
     $names = @("ma-tete.exe", "Ma Tete.exe", "mind.exe")
     $roots = @(
         (Join-Path $Root "src-tauri\target\release"),
-        (Join-Path $Root "src-tauri\target\debug"),
         (Join-Path $env:LOCALAPPDATA "Programs"),
-        (Join-Path $env:LOCALAPPDATA "com.matete.desktop"),
-        $env:LOCALAPPDATA
+        (Join-Path $env:LOCALAPPDATA "com.matete.desktop")
     )
 
     foreach ($name in $names) {
@@ -53,20 +51,33 @@ function Find-MindExecutable {
             }
         }
     }
-
-    try {
-        $any = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs") -Filter "ma-tete.exe" -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if ($any) { return $any.FullName }
-    } catch {
-    }
-
     return $null
+}
+
+function Start-MindDev {
+    $npm = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npm) { return $false }
+    $devScript = Join-Path $Root "scripts\open-mind-dev.ps1"
+    if (-not (Test-Path $devScript)) { return $false }
+    Write-Host "Lancement mode dev (code Git a jour)..." -ForegroundColor Cyan
+    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-NoExit",
+        "-File", $devScript
+    )
+    return $true
+}
+
+# Preferer le mode dev tant que l'installateur final n'est pas le flux quotidien.
+if (Start-MindDev) {
+    Start-Sleep -Seconds 2
+    exit 0
 }
 
 $exe = Find-MindExecutable
 if ($exe) {
-    Write-Host "Lancement: $exe" -ForegroundColor Cyan
+    Write-Host "Lancement exe: $exe" -ForegroundColor Cyan
     try {
         Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe -Parent)
         exit 0
@@ -75,24 +86,4 @@ if ($exe) {
     }
 }
 
-Write-Host "Aucun exe trouve - mode dev (npm run desktop:dev)." -ForegroundColor Yellow
-Write-Host ("Dossier: " + $Root)
-
-$npm = Get-Command npm -ErrorAction SilentlyContinue
-if (-not $npm) {
-    Fail "npm introuvable. Installe Node.js 20+ puis relance Ouvrir MIND."
-}
-
-$devScript = Join-Path $Root "scripts\open-mind-dev.ps1"
-if (-not (Test-Path $devScript)) {
-    Fail ("Script dev introuvable: " + $devScript)
-}
-
-Start-Process -FilePath "powershell.exe" -ArgumentList @(
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-NoExit",
-    "-File", $devScript
-)
-Write-Host "Fenetre dev lancee." -ForegroundColor Green
-Start-Sleep -Seconds 2
+Fail "npm introuvable et aucun exe. Installe Node.js 20+ ou build l'exe."
