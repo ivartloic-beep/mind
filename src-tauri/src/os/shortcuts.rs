@@ -1,10 +1,12 @@
-//! Global shortcuts — étape 11 + CTRL+ALT+P / CTRL+ALT+H post-it.
+//! Global shortcuts — capture, panneau, bibliothèque, post-it.
 //!
 //! Hook config : [`load_bindings`] / [`ShortcutBindings`] — prefs fichier plus tard.
 
+use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
+use crate::windows::library;
 use crate::windows::panel::{self, PANEL_LABEL};
 use crate::windows::postit;
 
@@ -15,6 +17,8 @@ pub struct ShortcutBindings {
     pub capture: &'static str,
     /// Ouvre / ferme le panneau.
     pub toggle_panel: &'static str,
+    /// Ouvre la bibliothèque.
+    pub open_library: &'static str,
     /// Crée un post-it scratch.
     pub scratch_postit: &'static str,
     /// Masque / réaffiche tous les post-its.
@@ -25,16 +29,59 @@ impl Default for ShortcutBindings {
     fn default() -> Self {
         Self {
             capture: "Ctrl+Alt+N",
-            toggle_panel: "Ctrl+Alt+Space",
+            toggle_panel: "Ctrl+Alt+Espace",
+            open_library: "Ctrl+Alt+B",
             scratch_postit: "Ctrl+Alt+P",
             toggle_postits: "Ctrl+Alt+H",
         }
     }
 }
 
+/// Entrée affichée dans les paramètres.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortcutInfo {
+    pub id: String,
+    pub label: String,
+    pub keys: String,
+}
+
 /// Charge les bindings — V1 = défauts ; hook pour prefs ultérieures.
 pub fn load_bindings() -> ShortcutBindings {
     ShortcutBindings::default()
+}
+
+/// Liste des raccourcis pour l’UI Paramètres.
+#[tauri::command]
+pub fn list_shortcuts() -> Vec<ShortcutInfo> {
+    let b = load_bindings();
+    vec![
+        ShortcutInfo {
+            id: "capture".into(),
+            label: "Capture rapide".into(),
+            keys: b.capture.into(),
+        },
+        ShortcutInfo {
+            id: "toggle_panel".into(),
+            label: "Ouvrir / fermer le panneau".into(),
+            keys: b.toggle_panel.into(),
+        },
+        ShortcutInfo {
+            id: "open_library".into(),
+            label: "Ouvrir la bibliothèque".into(),
+            keys: b.open_library.into(),
+        },
+        ShortcutInfo {
+            id: "scratch_postit".into(),
+            label: "Nouveau post-it".into(),
+            keys: b.scratch_postit.into(),
+        },
+        ShortcutInfo {
+            id: "toggle_postits".into(),
+            label: "Masquer / afficher les post-its".into(),
+            keys: b.toggle_postits.into(),
+        },
+    ]
 }
 
 /// Enregistre les raccourcis globaux au boot. Log + notif si conflit / échec.
@@ -62,11 +109,13 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
 
     let capture = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN);
     let toggle = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space);
+    let library_key = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyB);
     let postit_key = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyP);
     let hide_postits = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyH);
 
     let capture_sc = capture;
     let toggle_sc = toggle;
+    let library_sc = library_key;
     let postit_sc = postit_key;
     let hide_sc = hide_postits;
 
@@ -82,6 +131,10 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
                     }
                 } else if shortcut == &toggle_sc {
                     toggle_panel(app);
+                } else if shortcut == &library_sc {
+                    if let Err(err) = library::library_show(app.clone()) {
+                        eprintln!("shortcut library: {err}");
+                    }
                 } else if shortcut == &postit_sc {
                     if let Err(err) = postit::create_scratch_postit(app.clone()) {
                         eprintln!("shortcut postit: {err}");
@@ -102,6 +155,9 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
     if let Err(err) = app.global_shortcut().register(toggle) {
         failures.push(format!("{} ({})", bindings.toggle_panel, err));
     }
+    if let Err(err) = app.global_shortcut().register(library_key) {
+        failures.push(format!("{} ({})", bindings.open_library, err));
+    }
     if let Err(err) = app.global_shortcut().register(postit_key) {
         failures.push(format!("{} ({})", bindings.scratch_postit, err));
     }
@@ -111,9 +167,10 @@ fn register_with_bindings(app: &AppHandle, bindings: &ShortcutBindings) -> Resul
 
     if failures.is_empty() {
         eprintln!(
-            "shortcuts ok: {} → capture, {} → panneau, {} → post-it, {} → masquer post-its",
+            "shortcuts ok: {} → capture, {} → panneau, {} → bibliothèque, {} → post-it, {} → masquer post-its",
             bindings.capture,
             bindings.toggle_panel,
+            bindings.open_library,
             bindings.scratch_postit,
             bindings.toggle_postits
         );

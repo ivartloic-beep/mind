@@ -36,6 +36,10 @@ import {
 } from "../../services/panel";
 import { createScratchPostit } from "../../services/postit";
 import {
+  listShortcuts,
+  type ShortcutInfo,
+} from "../../services/shortcuts";
+import {
   syncGetConfig,
   syncNow,
   syncSetConfig,
@@ -89,6 +93,7 @@ export function PanelApp() {
   const [syncToken, setSyncToken] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  const [shortcuts, setShortcuts] = useState<ShortcutInfo[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloudEdit, setCloudEdit] = useState(false);
   const [, startTransition] = useTransition();
@@ -127,6 +132,8 @@ export function PanelApp() {
           setSyncCfg(sync);
           setSyncToken(sync.token);
         }
+        const keys = await listShortcuts();
+        if (!cancelled) setShortcuts(keys);
       } catch {
         /* ignore */
       }
@@ -514,6 +521,24 @@ export function PanelApp() {
               )}
               {syncCfg?.lastError && (
                 <p className="panel-error">{syncCfg.lastError}</p>
+              )}
+            </div>
+
+            <div className="panel-settings-group">
+              <div className="panel-settings-group-head">
+                <h3>Raccourcis clavier</h3>
+              </div>
+              {shortcuts.length === 0 ? (
+                <p className="panel-muted">Aucun raccourci chargé.</p>
+              ) : (
+                <ul className="panel-shortcuts-list">
+                  {shortcuts.map((item) => (
+                    <li key={item.id} className="panel-shortcuts-item">
+                      <span className="panel-shortcuts-label">{item.label}</span>
+                      <kbd className="panel-shortcuts-keys">{item.keys}</kbd>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </section>

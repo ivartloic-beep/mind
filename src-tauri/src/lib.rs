@@ -120,6 +120,7 @@ pub fn run() {
             os::notifications::open_task_from_reminder,
             os::autostart::autostart_set_enabled,
             os::autostart::autostart_is_enabled,
+            os::shortcuts::list_shortcuts,
             sync::sync_get_config,
             sync::sync_set_config,
             sync::sync_test,
