@@ -722,6 +722,31 @@
   color: var(--muted);
 }
 
+.panel-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.45rem 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.panel-input {
+  appearance: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.panel-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
 html,
 body,
 #root {

@@ -20,6 +20,7 @@ Nom provisoire : **Ma Tête**.
 - **Étape 11** : raccourcis globaux CTRL+ALT+N (capture) / CTRL+ALT+Espace (panneau)
 - **Étape 12** : tray + menu, autostart ON, single-instance, boot sans flash
 - **UX** : capture fermable (✕/Échap) · post-its autonomes (CTRL+ALT+P, croix=supprimer, CTRL+ALT+H masquer/réafficher) · panneau compact + Bibliothèque (réouvrable) · minuteur durée libre (+5 min)
+- **Cloud** : sync optionnelle vers `https://mind.louetline.fr` (Réglages → token + Synchroniser)
 
 V1 desktop + polish UX. Test réel Windows recommandé via installateur **NSIS**.
 
@@ -69,7 +70,14 @@ cd src-tauri && cargo check
 cd src-tauri && cargo test   # persistance SQLite (reopen)
 ```
 
-DB locale : `{app_data_dir}/ma-tete.db`.
+DB locale : `{app_data_dir}/ma-tete.db`.  
+Prefs sync : `{app_data_dir}/sync-prefs.json` (URL + token, hors git).
+
+### Sync cloud
+
+1. Panneau → **Réglages** → coller le Bearer token mind-api  
+2. **Tester** puis **Synchroniser** (pull puis push, last-write wins)  
+3. Si « Sync activée » : sync auto toutes les 5 min
 
 ## Entries frontend
 

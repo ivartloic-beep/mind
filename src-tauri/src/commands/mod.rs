@@ -8,6 +8,7 @@ use crate::domain::{
 };
 use crate::state::AppState;
 use crate::storage::{Storage, StorageError};
+use crate::sync;
 
 fn emit_changed(app: &AppHandle, entity: &str, id: &str) -> Result<(), String> {
     app.emit(
@@ -56,6 +57,7 @@ pub fn upsert_project(
 #[tauri::command]
 pub fn delete_project(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.storage.delete_project(&id).map_err(map_err)?;
+    sync::schedule_remote_delete(&app, "projects", id.clone());
     emit_changed(&app, "project", &id)?;
     Ok(())
 }
@@ -100,6 +102,7 @@ pub fn upsert_task(
 #[tauri::command]
 pub fn delete_task(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.storage.delete_task(&id).map_err(map_err)?;
+    sync::schedule_remote_delete(&app, "tasks", id.clone());
     emit_changed(&app, "task", &id)?;
     Ok(())
 }
@@ -194,6 +197,7 @@ pub fn upsert_note(
 #[tauri::command]
 pub fn delete_note(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.storage.delete_note(&id).map_err(map_err)?;
+    sync::schedule_remote_delete(&app, "notes", id.clone());
     emit_changed(&app, "note", &id)?;
     Ok(())
 }
@@ -265,6 +269,7 @@ pub fn delete_reminder(
     id: String,
 ) -> Result<(), String> {
     state.storage.delete_reminder(&id).map_err(map_err)?;
+    sync::schedule_remote_delete(&app, "reminders", id.clone());
     emit_changed(&app, "reminder", &id)?;
     Ok(())
 }
@@ -304,6 +309,7 @@ pub fn upsert_postit(
 #[tauri::command]
 pub fn delete_postit(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     state.storage.delete_postit(&id).map_err(map_err)?;
+    sync::schedule_remote_delete(&app, "postits", id.clone());
     emit_changed(&app, "postit", &id)?;
     Ok(())
 }

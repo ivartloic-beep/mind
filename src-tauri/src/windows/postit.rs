@@ -225,6 +225,7 @@ fn delete_postit_entity(app: &AppHandle, id: &str) -> Result<(), String> {
         .storage
         .delete_postit(id)
         .map_err(|e| e.to_string())?;
+    crate::sync::schedule_remote_delete(app, "postits", id.to_string());
     let _ = app.emit(
         "data-changed",
         DataChangedPayload {

@@ -34,6 +34,13 @@ import {
 } from "../../services/panel";
 import { createScratchPostit } from "../../services/postit";
 import {
+  syncGetConfig,
+  syncNow,
+  syncSetConfig,
+  syncTest,
+  type SyncConfigView,
+} from "../../services/sync";
+import {
   setPanelAlwaysOnTop as storeSetAot,
   setPanelOpen as storeSetOpen,
 } from "../../stores/ui-store";
@@ -76,6 +83,10 @@ export function PanelApp() {
   const [reminderBusy, setReminderBusy] = useState(false);
   const [autostart, setAutostart] = useState(true);
   const [autostartBusy, setAutostartBusy] = useState(false);
+  const [syncCfg, setSyncCfg] = useState<SyncConfigView | null>(null);
+  const [syncToken, setSyncToken] = useState("");
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const settingsRef = useRef<HTMLElement | null>(null);
 
@@ -108,6 +119,11 @@ export function PanelApp() {
       try {
         const enabled = await autostartIsEnabled();
         if (!cancelled) setAutostart(enabled);
+        const sync = await syncGetConfig();
+        if (!cancelled && sync) {
+          setSyncCfg(sync);
+          setSyncToken(sync.token);
+        }
       } catch {
         /* ignore */
       }
@@ -130,7 +146,8 @@ export function PanelApp() {
         payload.entity === "task" ||
         payload.entity === "note" ||
         payload.entity === "reminder" ||
-        payload.entity === "project"
+        payload.entity === "project" ||
+        payload.entity === "sync"
       ) {
         startTransition(() => {
           void refresh().catch(() => undefined);
@@ -224,6 +241,67 @@ export function PanelApp() {
       setAutostart(!next);
     } finally {
       setAutostartBusy(false);
+    }
+  }
+
+  async function saveSync(partial?: { enabled?: boolean; token?: string }) {
+    if (!syncCfg) return;
+    setSyncBusy(true);
+    setSyncMsg(null);
+    try {
+      const next = await syncSetConfig({
+        enabled: partial?.enabled ?? syncCfg.enabled,
+        baseUrl: syncCfg.baseUrl || "https://mind.louetline.fr",
+        token: partial?.token ?? syncToken,
+      });
+      setSyncCfg(next);
+      setSyncToken(next.token);
+      setSyncMsg("Enregistré");
+    } catch (err) {
+      setSyncMsg(err instanceof Error ? err.message : "Erreur sync");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleSyncTest() {
+    setSyncBusy(true);
+    setSyncMsg(null);
+    try {
+      await syncSetConfig({
+        enabled: syncCfg?.enabled ?? false,
+        baseUrl: syncCfg?.baseUrl || "https://mind.louetline.fr",
+        token: syncToken,
+      });
+      const service = await syncTest();
+      setSyncMsg(`OK — ${service}`);
+    } catch (err) {
+      setSyncMsg(err instanceof Error ? err.message : "Test échoué");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  async function handleSyncNow() {
+    setSyncBusy(true);
+    setSyncMsg(null);
+    try {
+      await syncSetConfig({
+        enabled: true,
+        baseUrl: syncCfg?.baseUrl || "https://mind.louetline.fr",
+        token: syncToken,
+      });
+      const report = await syncNow();
+      const cfg = await syncGetConfig();
+      if (cfg) setSyncCfg(cfg);
+      setSyncMsg(`Sync : ${report.pushed} envoyés, ${report.pulled} reçus`);
+      await refresh();
+    } catch (err) {
+      setSyncMsg(err instanceof Error ? err.message : "Sync échouée");
+      const cfg = await syncGetConfig();
+      if (cfg) setSyncCfg(cfg);
+    } finally {
+      setSyncBusy(false);
     }
   }
 
@@ -449,6 +527,58 @@ export function PanelApp() {
             />
             <span>Démarrer avec Windows</span>
           </label>
+
+          <h3 className="panel-subhead">Cloud (mind.louetline.fr)</h3>
+          <label className="panel-toggle">
+            <input
+              type="checkbox"
+              checked={syncCfg?.enabled ?? false}
+              disabled={syncBusy || !syncCfg}
+              onChange={() =>
+                void saveSync({ enabled: !(syncCfg?.enabled ?? false) })
+              }
+            />
+            <span>Sync activée</span>
+          </label>
+          <label className="panel-field">
+            <span>Token API</span>
+            <input
+              type="password"
+              className="panel-input"
+              value={syncToken}
+              disabled={syncBusy}
+              placeholder="Bearer token"
+              onChange={(e) => setSyncToken(e.target.value)}
+              onBlur={() => void saveSync()}
+            />
+          </label>
+          <div className="panel-actions">
+            <button
+              type="button"
+              className="panel-action-btn"
+              disabled={syncBusy || !syncToken.trim()}
+              onClick={() => void handleSyncTest()}
+            >
+              Tester
+            </button>
+            <button
+              type="button"
+              className="panel-action-btn is-primary"
+              disabled={syncBusy || !syncToken.trim()}
+              onClick={() => void handleSyncNow()}
+            >
+              Synchroniser
+            </button>
+          </div>
+          {syncMsg && <p className="panel-muted">{syncMsg}</p>}
+          {syncCfg?.lastSyncAt && (
+            <p className="panel-muted">
+              Dernière sync : {new Date(syncCfg.lastSyncAt).toLocaleString()}
+            </p>
+          )}
+          {syncCfg?.lastError && (
+            <p className="panel-error">{syncCfg.lastError}</p>
+          )}
         </section>
       </div>
     </div>

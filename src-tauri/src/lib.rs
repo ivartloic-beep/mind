@@ -3,6 +3,7 @@ mod domain;
 mod os;
 mod state;
 mod storage;
+mod sync;
 mod windows;
 
 use std::path::PathBuf;
@@ -53,6 +54,7 @@ pub fn run() {
             }
 
             os::notifications::start_reminder_scheduler(app.handle().clone());
+            sync::start_sync_scheduler(app.handle().clone());
             os::shortcuts::register_shortcuts(app.handle());
 
             #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
@@ -118,6 +120,10 @@ pub fn run() {
             os::notifications::open_task_from_reminder,
             os::autostart::autostart_set_enabled,
             os::autostart::autostart_is_enabled,
+            sync::sync_get_config,
+            sync::sync_set_config,
+            sync::sync_test,
+            sync::sync_now,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
