@@ -1,5 +1,6 @@
 /**
  * Capture rapide — création directe Task / Note / Idée.
+ * Tâches : mêmes champs que Gestion (desc, priorité, échéance, statut, notes, projet).
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -12,7 +13,7 @@ import {
   upsertProject,
 } from "../../services/api";
 import { captureHide } from "../../services/capture";
-import type { Project } from "../../types/models";
+import type { Project, TaskPriority, TaskStatus } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 import "./capture.css";
 
@@ -27,6 +28,11 @@ export function CaptureApp() {
   const [kind, setKind] = useState<CaptureKind>("task");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -36,6 +42,7 @@ export function CaptureApp() {
   const closingRef = useRef(false);
   const busyRef = useRef(false);
   const creatingProjectRef = useRef(false);
+  const interactingRef = useRef(false);
 
   async function closeCapture() {
     if (closingRef.current) return;
@@ -51,6 +58,11 @@ export function CaptureApp() {
     setText("");
     setKind("task");
     setProjectId(null);
+    setDescription("");
+    setPriority("medium");
+    setStatus("todo");
+    setDueDate("");
+    setNotes("");
     setCreatingProject(false);
     creatingProjectRef.current = false;
     setNewProjectName("");
@@ -152,10 +164,16 @@ export function CaptureApp() {
           }
           return;
         }
-        if (busyRef.current || creatingProjectRef.current) return;
+        if (busyRef.current || creatingProjectRef.current || interactingRef.current) {
+          return;
+        }
         blurTimer = window.setTimeout(() => {
           blurTimer = null;
-          if (!busyRef.current && !creatingProjectRef.current) {
+          if (
+            !busyRef.current &&
+            !creatingProjectRef.current &&
+            !interactingRef.current
+          ) {
             void closeCapture();
           }
         }, 320);
@@ -193,7 +211,19 @@ export function CaptureApp() {
     setError(null);
     try {
       if (kind === "task") {
-        await createTask(value, projectId);
+        const projectName = projectId
+          ? projects.find((p) => p.id === projectId)?.name
+          : undefined;
+        await createTask({
+          title: value,
+          projectId,
+          description: description.trim() || null,
+          category: projectName || null,
+          priority,
+          dueDate: dueDate.trim() || null,
+          status,
+          notes: notes.trim() || null,
+        });
       } else {
         await createNote(value, kind, projectId);
       }
@@ -206,6 +236,10 @@ export function CaptureApp() {
       busyRef.current = false;
       inputRef.current?.focus();
     }
+  }
+
+  function markInteracting(on: boolean) {
+    interactingRef.current = on;
   }
 
   return (
@@ -234,10 +268,18 @@ export function CaptureApp() {
         value={text}
         autoFocus
         disabled={busy || creatingProject}
-        placeholder="Écris, puis Entrée — Échap pour fermer"
+        placeholder={
+          kind === "task"
+            ? "Titre de la tâche — Entrée pour créer"
+            : "Écris, puis Entrée — Échap pour fermer"
+        }
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" && kind !== "task") {
+            e.preventDefault();
+            void submit();
+          }
+          if (e.key === "Enter" && kind === "task" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             void submit();
           }
@@ -278,70 +320,139 @@ export function CaptureApp() {
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => void submit()}
         >
-          {busy && !creatingProject ? "…" : "Entrée"}
+          {busy && !creatingProject ? "…" : kind === "task" ? "Créer" : "Entrée"}
         </button>
       </div>
-      {kind === "task" && !creatingProject && (
-        <div className="capture-project-row">
-          <span className="capture-project-label">Projet</span>
-          <ProjectSelect
-            projects={projects}
-            value={projectId}
-            disabled={busy}
-            onChange={setProjectId}
-            ariaLabel="Projet de la tâche (optionnel)"
+      {kind === "task" && (
+        <>
+          <textarea
+            className="capture-textarea"
+            value={description}
+            disabled={busy || creatingProject}
+            placeholder="Description (optionnel)"
+            rows={2}
+            onFocus={() => markInteracting(true)}
+            onBlur={() => markInteracting(false)}
+            onChange={(e) => setDescription(e.target.value)}
           />
-          <button
-            type="button"
-            className="capture-project-new"
-            disabled={busy}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={openCreateProject}
-          >
-            + Nouveau
-          </button>
-        </div>
-      )}
-      {kind === "task" && creatingProject && (
-        <div className="capture-project-create">
-          <input
-            ref={projectNameRef}
-            className="capture-project-input"
-            type="text"
-            value={newProjectName}
-            disabled={busy}
-            placeholder="Nom du projet"
-            aria-label="Nom du nouveau projet"
-            onChange={(e) => setNewProjectName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                e.stopPropagation();
-                void createProjectAndSelect();
-              }
-            }}
+          {!creatingProject && (
+            <div className="capture-project-row">
+              <span className="capture-project-label">Projet</span>
+              <ProjectSelect
+                projects={projects}
+                value={projectId}
+                disabled={busy}
+                onChange={setProjectId}
+                ariaLabel="Projet / catégorie Gestion (optionnel)"
+              />
+              <button
+                type="button"
+                className="capture-project-new"
+                disabled={busy}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={openCreateProject}
+              >
+                + Nouveau
+              </button>
+            </div>
+          )}
+          {creatingProject && (
+            <div className="capture-project-create">
+              <input
+                ref={projectNameRef}
+                className="capture-project-input"
+                type="text"
+                value={newProjectName}
+                disabled={busy}
+                placeholder="Nom du projet"
+                aria-label="Nom du nouveau projet"
+                onChange={(e) => setNewProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void createProjectAndSelect();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="capture-project-create-btn"
+                disabled={busy || !newProjectName.trim()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void createProjectAndSelect()}
+              >
+                {busy ? "…" : "Créer"}
+              </button>
+              <button
+                type="button"
+                className="capture-project-cancel"
+                disabled={busy}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={cancelCreateProject}
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+          <div className="capture-fields">
+            <label className="capture-field">
+              <span>Priorité</span>
+              <select
+                value={priority}
+                disabled={busy || creatingProject}
+                onFocus={() => markInteracting(true)}
+                onBlur={() => markInteracting(false)}
+                onChange={(e) => setPriority(e.target.value as TaskPriority)}
+              >
+                <option value="low">Basse</option>
+                <option value="medium">Moyenne</option>
+                <option value="high">Haute</option>
+              </select>
+            </label>
+            <label className="capture-field">
+              <span>Statut</span>
+              <select
+                value={status}
+                disabled={busy || creatingProject}
+                onFocus={() => markInteracting(true)}
+                onBlur={() => markInteracting(false)}
+                onChange={(e) => setStatus(e.target.value as TaskStatus)}
+              >
+                <option value="todo">À faire</option>
+                <option value="in_progress">En cours</option>
+                <option value="done">Terminée</option>
+              </select>
+            </label>
+            <label className="capture-field">
+              <span>Échéance</span>
+              <input
+                type="date"
+                value={dueDate}
+                disabled={busy || creatingProject}
+                onFocus={() => markInteracting(true)}
+                onBlur={() => markInteracting(false)}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </label>
+          </div>
+          <textarea
+            className="capture-textarea capture-textarea-notes"
+            value={notes}
+            disabled={busy || creatingProject}
+            placeholder="Notes (optionnel)"
+            rows={2}
+            onFocus={() => markInteracting(true)}
+            onBlur={() => markInteracting(false)}
+            onChange={(e) => setNotes(e.target.value)}
           />
-          <button
-            type="button"
-            className="capture-project-create-btn"
-            disabled={busy || !newProjectName.trim()}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => void createProjectAndSelect()}
-          >
-            {busy ? "…" : "Créer"}
-          </button>
-          <button
-            type="button"
-            className="capture-project-cancel"
-            disabled={busy}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={cancelCreateProject}
-          >
-            Annuler
-          </button>
-        </div>
+        </>
       )}
-      <p className="capture-hint">Échap ou ✕ pour fermer sans créer</p>
+      <p className="capture-hint">
+        {kind === "task"
+          ? "Créer ou Ctrl+Entrée — Échap pour fermer"
+          : "Échap ou ✕ pour fermer sans créer"}
+      </p>
       {error && <p className="capture-error">{error}</p>}
     </main>
   );

@@ -3,8 +3,8 @@
 use tauri::{AppHandle, Emitter, State};
 
 use crate::domain::{
-    new_id, now_iso, DataChangedPayload, Note, NoteFilter, NoteKind, PostIt, PostItFilter, Project,
-    Reminder, ReminderFilter, Task, TaskFilter,
+    new_id, now_iso, CreateTaskInput, DataChangedPayload, Note, NoteFilter, NoteKind, PostIt,
+    PostItFilter, Project, Reminder, ReminderFilter, Task, TaskFilter,
 };
 use crate::gestion;
 use crate::state::AppState;
@@ -26,11 +26,14 @@ fn map_err(err: StorageError) -> String {
     err.to_string()
 }
 
-// --- Projects ---
+// --- Projects (SQLite local, ou work_projects si session Gestion) ---
 
 #[tauri::command]
-pub fn list_projects(state: State<'_, AppState>) -> Result<Vec<Project>, String> {
-    state.storage.list_projects().map_err(map_err)
+pub async fn list_projects(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<Project>, String> {
+    gestion::list_projects_hybrid(&app, &state).await
 }
 
 #[tauri::command]
@@ -39,26 +42,26 @@ pub fn get_project(state: State<'_, AppState>, id: String) -> Result<Option<Proj
 }
 
 #[tauri::command]
-pub fn upsert_project(
+pub async fn upsert_project(
     app: AppHandle,
     state: State<'_, AppState>,
-    mut project: Project,
+    project: Project,
 ) -> Result<Project, String> {
-    if project.id.is_empty() {
-        project.id = new_id();
-    }
-    if project.created_at.is_empty() {
-        project.created_at = now_iso();
-    }
-    state.storage.upsert_project(&project).map_err(map_err)?;
+    let project = gestion::upsert_project_hybrid(&app, &state, project).await?;
     emit_changed(&app, "project", &project.id)?;
     Ok(project)
 }
 
 #[tauri::command]
-pub fn delete_project(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
-    state.storage.delete_project(&id).map_err(map_err)?;
-    sync::schedule_remote_delete(&app, "projects", id.clone());
+pub async fn delete_project(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    gestion::delete_project_hybrid(&app, &state, &id).await?;
+    if !gestion::tasks_backend_active(&app) {
+        sync::schedule_remote_delete(&app, "projects", id.clone());
+    }
     emit_changed(&app, "project", &id)?;
     Ok(())
 }
@@ -108,15 +111,14 @@ pub async fn delete_task(
     Ok(())
 }
 
-/// Capture rapide → création directe d'une Task (pas d'InboxItem).
+/// Capture rapide → création directe d'une Task (champs Gestion).
 #[tauri::command]
 pub async fn create_task(
     app: AppHandle,
     state: State<'_, AppState>,
-    title: String,
-    project_id: Option<String>,
+    input: CreateTaskInput,
 ) -> Result<Task, String> {
-    let task = gestion::create_task_hybrid(&app, &state, title, project_id).await?;
+    let task = gestion::create_task_hybrid(&app, &state, input).await?;
     emit_changed(&app, "task", &task.id)?;
     Ok(task)
 }

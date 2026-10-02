@@ -6,10 +6,14 @@ pub use client::{GestionClient, MigrateReport};
 
 use tauri::AppHandle;
 
-use crate::domain::{now_iso, Task, TaskFilter, TaskPriority, TaskStatus};
+use crate::domain::{now_iso, CreateTaskInput, Project, Task, TaskFilter, TaskPriority, TaskStatus};
 use crate::state::AppState;
 use crate::storage::Storage;
 use crate::windows::gestion::{load_prefs, save_prefs, GestionPrefs};
+
+use self::client::{
+    remove_work_project_value, upsert_work_project_value, work_project_to_mind,
+};
 
 pub fn try_client(app: &AppHandle) -> Option<GestionClient> {
     let prefs = load_prefs(app);
@@ -33,8 +37,28 @@ fn set_last_error(app: &AppHandle, err: Option<String>) {
     let _ = save_prefs(app, &prefs);
 }
 
+fn link_category_to_project(task: &mut Task, projects: &[Project]) {
+    if task.project_id.is_some() {
+        return;
+    }
+    if task.category.trim().is_empty() {
+        return;
+    }
+    let cat = task.category.trim();
+    if let Some(p) = projects
+        .iter()
+        .find(|p| p.name.eq_ignore_ascii_case(cat))
+    {
+        task.project_id = Some(p.id.clone());
+    }
+}
+
 /// Convertit une tâche API gestion → modèle MIND, en préservant reminder/project locaux.
-pub fn merge_remote_with_local(remote: Task, local: Option<&Task>) -> Task {
+pub fn merge_remote_with_local(
+    remote: Task,
+    local: Option<&Task>,
+    projects: &[Project],
+) -> Task {
     let mut task = remote;
     if let Some(local) = local {
         if task.project_id.is_none() {
@@ -43,14 +67,15 @@ pub fn merge_remote_with_local(remote: Task, local: Option<&Task>) -> Task {
         if task.reminder.is_none() {
             task.reminder = local.reminder.clone();
         }
-        // Si category vide mais projet local, garder le lien projet.
         if task.category.is_empty() {
             if let Some(pid) = &local.project_id {
-                // category reste vide ; project_id local est conservé ci-dessus.
-                let _ = pid;
+                if let Some(p) = projects.iter().find(|p| &p.id == pid) {
+                    task.category = p.name.clone();
+                }
             }
         }
     }
+    link_category_to_project(&mut task, projects);
     task.normalize();
     task
 }
@@ -90,10 +115,11 @@ pub async fn list_tasks_hybrid(
     match client.list_tasks(None).await {
         Ok(remote) => {
             set_last_error(app, None);
+            let projects = list_projects_hybrid(app, state).await.unwrap_or_default();
             let mut merged = Vec::with_capacity(remote.len());
             for r in remote {
                 let local = state.storage.get_task(&r.id).map_err(|e| e.to_string())?;
-                let task = merge_remote_with_local(r, local.as_ref());
+                let task = merge_remote_with_local(r, local.as_ref(), &projects);
                 state.storage.upsert_task(&task).map_err(|e| e.to_string())?;
                 merged.push(task);
             }
@@ -191,11 +217,13 @@ pub async fn delete_task_hybrid(
 pub async fn create_task_hybrid(
     app: &AppHandle,
     state: &AppState,
-    title: String,
-    project_id: Option<String>,
+    input: CreateTaskInput,
 ) -> Result<Task, String> {
     let now = now_iso();
-    let category = if let Some(ref pid) = project_id {
+    let project_id = input.project_id;
+    let category = if let Some(cat) = input.category.filter(|c| !c.trim().is_empty()) {
+        cat.trim().to_string()
+    } else if let Some(ref pid) = project_id {
         state
             .storage
             .get_project(pid)
@@ -207,18 +235,19 @@ pub async fn create_task_hybrid(
         String::new()
     };
     let prefs = load_prefs(app);
+    let status = input.status.unwrap_or(TaskStatus::Todo);
     let task = Task {
         id: crate::domain::new_id(),
-        title,
-        description: String::new(),
+        title: input.title.trim().to_string(),
+        description: input.description.unwrap_or_default(),
         category,
-        status: TaskStatus::Todo,
-        completed: false,
-        priority: Some(TaskPriority::Medium),
-        due_date: None,
+        status,
+        completed: status.is_done(),
+        priority: Some(input.priority.unwrap_or(TaskPriority::Medium)),
+        due_date: input.due_date.filter(|d| !d.trim().is_empty()),
         assigned_to: prefs.user_id,
         created_by: prefs.user_id,
-        notes: String::new(),
+        notes: input.notes.unwrap_or_default(),
         documents: Vec::new(),
         activities: Vec::new(),
         project_id,
@@ -227,6 +256,91 @@ pub async fn create_task_hybrid(
         updated_at: now,
     };
     upsert_task_hybrid(app, state, task).await
+}
+
+// --- Projets (work_projects Gestion ↔ SQLite local) ---
+
+pub async fn list_projects_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<Vec<Project>, String> {
+    let Some(client) = try_client(app) else {
+        return state.storage.list_projects().map_err(|e| e.to_string());
+    };
+    match client.get_work_projects().await {
+        Ok(data) => {
+            set_last_error(app, None);
+            let mut out = Vec::new();
+            for entry in &data.projects {
+                if let Some(p) = work_project_to_mind(entry) {
+                    state.storage.upsert_project(&p).map_err(|e| e.to_string())?;
+                    out.push(p);
+                }
+            }
+            out.sort_by(|a, b| a.created_at.cmp(&b.created_at));
+            Ok(out)
+        }
+        Err(err) => {
+            set_last_error(app, Some(format!("Projets cache — {err}")));
+            state.storage.list_projects().map_err(|e| e.to_string())
+        }
+    }
+}
+
+pub async fn upsert_project_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+    mut project: Project,
+) -> Result<Project, String> {
+    if project.id.is_empty() {
+        project.id = crate::domain::new_id();
+    }
+    if project.created_at.is_empty() {
+        project.created_at = now_iso();
+    }
+    state
+        .storage
+        .upsert_project(&project)
+        .map_err(|e| e.to_string())?;
+
+    if let Some(client) = try_client(app) {
+        match client.get_work_projects().await {
+            Ok(mut data) => {
+                upsert_work_project_value(&mut data, &project);
+                match client.save_work_projects(&data).await {
+                    Ok(()) => set_last_error(app, None),
+                    Err(err) => {
+                        set_last_error(app, Some(format!("Projet local — API: {err}")))
+                    }
+                }
+            }
+            Err(err) => set_last_error(app, Some(format!("Projet local — API: {err}"))),
+        }
+    }
+    Ok(project)
+}
+
+pub async fn delete_project_hybrid(
+    app: &AppHandle,
+    state: &AppState,
+    id: &str,
+) -> Result<(), String> {
+    state.storage.delete_project(id).map_err(|e| e.to_string())?;
+    if let Some(client) = try_client(app) {
+        match client.get_work_projects().await {
+            Ok(mut data) => {
+                remove_work_project_value(&mut data, id);
+                match client.save_work_projects(&data).await {
+                    Ok(()) => set_last_error(app, None),
+                    Err(err) => {
+                        set_last_error(app, Some(format!("Suppression projet locale — API: {err}")))
+                    }
+                }
+            }
+            Err(err) => set_last_error(app, Some(format!("Suppression projet locale — API: {err}"))),
+        }
+    }
+    Ok(())
 }
 
 pub async fn set_task_done_hybrid(
@@ -271,6 +385,15 @@ pub async fn login(
     }
     save_prefs(app, &prefs)?;
     Ok(prefs)
+}
+
+/// Après login : tire les projets Gestion dans le cache local.
+pub async fn sync_projects_after_login(
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<usize, String> {
+    let rows = list_projects_hybrid(app, state).await?;
+    Ok(rows.len())
 }
 
 pub fn logout(app: &AppHandle) -> Result<GestionPrefs, String> {

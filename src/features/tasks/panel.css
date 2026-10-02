@@ -84,6 +84,21 @@
   max-width: 28ch;
 }
 
+.panel-gestion-status {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  max-width: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.panel-gestion-status.is-connected {
+  color: color-mix(in srgb, var(--accent-strong) 85%, var(--fg));
+}
+
 .panel-settings-btn {
   appearance: none;
   border: 0;

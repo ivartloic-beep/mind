@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use url::Url;
 
 pub const GESTION_LABEL: &str = "gestion";
@@ -267,6 +267,17 @@ pub async fn gestion_login(
     let prefs = crate::gestion::login(&app, username, password).await?;
     if let Some(window) = app.get_webview_window(GESTION_LABEL) {
         inject_session_bridge(&window, &prefs);
+    }
+    // Tire work_projects dans le cache local (panneau / capture).
+    let state = app.state::<crate::state::AppState>();
+    if let Ok(n) = crate::gestion::sync_projects_after_login(&app, &state).await {
+        let _ = app.emit(
+            "data-changed",
+            crate::domain::DataChangedPayload {
+                entity: "project".into(),
+                id: format!("sync:{n}"),
+            },
+        );
     }
     Ok(prefs)
 }

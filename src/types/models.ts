@@ -79,6 +79,18 @@ export type PostIt = {
   open: boolean;
 };
 
+/** Création capture / panneau — aligné sur CreateTaskInput Rust / Gestion. */
+export type CreateTaskInput = {
+  title: string;
+  projectId?: string | null;
+  description?: string | null;
+  category?: string | null;
+  priority?: TaskPriority | null;
+  dueDate?: string | null;
+  status?: TaskStatus | null;
+  notes?: string | null;
+};
+
 export type TaskFilter = {
   projectId?: string | null;
   noProject?: boolean;

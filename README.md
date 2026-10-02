@@ -23,6 +23,7 @@ Nom provisoire : **Ma Tête**.
 - **Cloud** : sync optionnelle vers `https://mind.louetline.fr` (Réglages → token + Synchroniser)
 - **Phase 1 Gestion** : shell Windows embarque le front `gestion-v2` (`public/gestion/`), sans messagerie/mails, Événementiel → Production.
 - **Phase 2 Tâches** : modèle Task = `personal_tasks` (gestion). Avec session Gestion (Paramètres → login), capture/panneau/bibliothèque CRUD via l’API PHP ; sinon SQLite local élargi. Import one-shot des tâches locales. Voir `docs/ROADMAP-GESTION-WINDOWS.md`.
+- **Sync panneau ↔ Gestion** : tâches créées dans la capture partent dans Gestion (titre, description, priorité, échéance, statut, notes, projet/catégorie). Projets MIND ↔ `work_projects` Gestion.
 
 V1 desktop + polish UX. Test réel Windows recommandé via installateur **NSIS**.
 

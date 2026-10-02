@@ -1,10 +1,10 @@
-//! HTTP client pour login.php + personal_tasks.php.
+//! HTTP client pour login.php + personal_tasks.php + work_projects.php.
 
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::domain::{Task, TaskPriority, TaskStatus};
+use crate::domain::{now_iso, Project, Task, TaskPriority, TaskStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +46,82 @@ struct ApiOkResponse {
     success: Option<bool>,
     id: Option<String>,
     error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiWorkProjectsResponse {
+    success: Option<bool>,
+    work_projects: Option<WorkProjectsData>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkProjectsData {
+    /// Entrées brutes (on préserve les champs Gestion au round-trip).
+    #[serde(default)]
+    pub projects: Vec<Value>,
+    #[serde(default)]
+    pub templates: Vec<Value>,
+}
+
+pub fn work_project_to_mind(value: &Value) -> Option<Project> {
+    let id = value.get("id")?.as_str()?.to_string();
+    let name = value.get("name")?.as_str()?.to_string();
+    if id.is_empty() || name.is_empty() {
+        return None;
+    }
+    let color = value
+        .get("color")
+        .and_then(|c| c.as_str())
+        .map(|s| s.to_string());
+    let created_at = value
+        .get("createdAt")
+        .and_then(|c| c.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(now_iso);
+    Some(Project {
+        id,
+        name,
+        color,
+        created_at,
+    })
+}
+
+pub fn upsert_work_project_value(data: &mut WorkProjectsData, project: &Project) {
+    let mut found = false;
+    for entry in &mut data.projects {
+        if entry.get("id").and_then(|v| v.as_str()) == Some(project.id.as_str()) {
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert("name".into(), Value::String(project.name.clone()));
+                if let Some(color) = &project.color {
+                    obj.insert("color".into(), Value::String(color.clone()));
+                }
+                obj.insert("updatedAt".into(), Value::String(now_iso()));
+            }
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        data.projects.push(serde_json::json!({
+            "id": project.id,
+            "name": project.name,
+            "color": project.color.clone().unwrap_or_else(|| "#4a90d9".into()),
+            "icon": "📁",
+            "description": "",
+            "tasks": [],
+            "team": [],
+            "createdAt": project.created_at,
+            "updatedAt": now_iso(),
+        }));
+    }
+}
+
+pub fn remove_work_project_value(data: &mut WorkProjectsData, id: &str) {
+    data.projects
+        .retain(|e| e.get("id").and_then(|v| v.as_str()) != Some(id));
 }
 
 /// Payload brut personal_tasks (API PHP).
@@ -377,6 +453,70 @@ impl GestionClient {
         if !status.is_success() {
             let text = res.text().await.unwrap_or_default();
             return Err(format!("personal_tasks DELETE HTTP {status}: {text}"));
+        }
+        Ok(())
+    }
+
+    pub async fn get_work_projects(&self) -> Result<WorkProjectsData, String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let endpoint = format!("work_projects.php?token={}", urlencoding_lite(&raw));
+        let url = self.url(&endpoint);
+        let res = self
+            .http
+            .get(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let body = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            return Err(format!("work_projects GET HTTP {status}: {body}"));
+        }
+        let parsed: ApiWorkProjectsResponse = serde_json::from_str(&body).map_err(|e| {
+            format!(
+                "work_projects JSON: {e} — {}",
+                body.chars().take(200).collect::<String>()
+            )
+        })?;
+        if let Some(err) = parsed.error {
+            return Err(err);
+        }
+        Ok(parsed.work_projects.unwrap_or_default())
+    }
+
+    pub async fn save_work_projects(&self, data: &WorkProjectsData) -> Result<(), String> {
+        let (bearer, raw) = self.auth_headers()?;
+        let url = self.url("work_projects.php");
+        let body = serde_json::json!({
+            "workProjects": data,
+            "token": raw,
+        });
+        let res = self
+            .http
+            .post(&url)
+            .header(AUTHORIZATION, bearer)
+            .header("X-Auth-Token", &raw)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let status = res.status();
+        let text = res.text().await.map_err(|e| e.to_string())?;
+        if status.as_u16() == 401 {
+            return Err("Session Gestion expirée".into());
+        }
+        if !status.is_success() {
+            let err = serde_json::from_str::<ApiOkResponse>(&text)
+                .ok()
+                .and_then(|r| r.error)
+                .unwrap_or(text);
+            return Err(format!("work_projects POST: {err}"));
         }
         Ok(())
     }

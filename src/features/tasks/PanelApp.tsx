@@ -566,7 +566,8 @@ export function PanelApp() {
                 <h3>Gestion (app complète)</h3>
               </div>
               <p className="panel-muted">
-                URL API + session : les tâches MIND utilisent alors personal_tasks.
+                Session active : tâches → personal_tasks, projets → work_projects.
+                La capture utilise les mêmes champs que Gestion.
               </p>
               <label className="panel-field">
                 <span>API Gestion</span>
@@ -620,8 +621,8 @@ export function PanelApp() {
               {gestionLoggedIn ? (
                 <>
                   <p className="panel-muted">
-                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Tâches =
-                    personal_tasks.
+                    Connecté{gestionUser ? ` — ${gestionUser}` : ""}. Tâches et
+                    projets synchronisés avec Gestion.
                   </p>
                   <div className="panel-actions">
                     <button
@@ -745,7 +746,10 @@ export function PanelApp() {
                             setGestionLoggedIn(isGestionLoggedIn(cfg));
                             setGestionUser(cfg.userName || null);
                             setGestionPassword("");
-                            setGestionMsg("Connecté à Gestion");
+                            setGestionMsg(
+                              "Connecté — tâches et projets synchronisés",
+                            );
+                            await listProjects();
                             await refresh();
                           } catch (err) {
                             setGestionMsg(
@@ -801,6 +805,23 @@ export function PanelApp() {
                 </button>
               </div>
               <p>Capturer d&apos;abord, organiser ensuite.</p>
+              {gestionLoggedIn ? (
+                <p className="panel-gestion-status is-connected" title={gestionUser || undefined}>
+                  Gestion · connecté{gestionUser ? ` — ${gestionUser}` : ""}
+                  {gestionLastError ? " · cache local" : ""}
+                </p>
+              ) : (
+                <p className="panel-gestion-status">
+                  Gestion hors ligne —{" "}
+                  <button
+                    type="button"
+                    className="panel-link-btn"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    se connecter
+                  </button>
+                </p>
+              )}
             </header>
 
             {dueReminder && (

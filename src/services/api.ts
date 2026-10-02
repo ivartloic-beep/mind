@@ -4,6 +4,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  CreateTaskInput,
   Note,
   NoteFilter,
   NoteKind,
@@ -15,6 +16,8 @@ import type {
   Task,
   TaskFilter,
 } from "../types/models";
+
+export type { CreateTaskInput };
 
 export async function ping(): Promise<string> {
   return invoke<string>("ping");
@@ -35,9 +38,9 @@ export const listTasks = (filter?: TaskFilter) =>
 export const getTask = (id: string) => invoke<Task | null>("get_task", { id });
 export const upsertTask = (task: Task) => invoke<Task>("upsert_task", { task });
 export const deleteTask = (id: string) => invoke<void>("delete_task", { id });
-/** Capture → Task directe. */
-export const createTask = (title: string, projectId?: string | null) =>
-  invoke<Task>("create_task", { title, projectId: projectId ?? null });
+/** Capture → Task directe (champs Gestion). */
+export const createTask = (input: CreateTaskInput) =>
+  invoke<Task>("create_task", { input });
 /** Coche / décoche immédiate. */
 export const setTaskDone = (id: string, done: boolean) =>
   invoke<Task>("set_task_done", { id, done });
