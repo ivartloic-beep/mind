@@ -1,4 +1,4 @@
-# Cree 2 raccourcis sur le Bureau : Mettre a jour MIND / Ouvrir MIND
+# Cree les raccourcis Bureau : Mettre a jour / Ouvrir / Arreter MIND
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -9,8 +9,9 @@ if (-not (Test-Path (Join-Path $Root "package.json"))) {
 $Desktop = [Environment]::GetFolderPath("Desktop")
 $UpdatePs1 = Join-Path $Root "scripts\update-mind.ps1"
 $OpenPs1 = Join-Path $Root "scripts\open-mind.ps1"
+$StopPs1 = Join-Path $Root "scripts\stop-mind.ps1"
 
-foreach ($p in @($UpdatePs1, $OpenPs1)) {
+foreach ($p in @($UpdatePs1, $OpenPs1, $StopPs1)) {
     if (-not (Test-Path $p)) { throw "Script introuvable: $p" }
 }
 
@@ -19,13 +20,11 @@ $Wsh = New-Object -ComObject WScript.Shell
 function New-MindShortcut {
     param(
         [string]$Name,
-        [string]$ScriptPath,
-        [string]$IconHint
+        [string]$ScriptPath
     )
     $lnkPath = Join-Path $Desktop "$Name.lnk"
     $sc = $Wsh.CreateShortcut($lnkPath)
     $sc.TargetPath = "powershell.exe"
-    # Ouvrir MIND : garder la fenetre si erreur ; update peut se fermer apres succes.
     if ($Name -like "*Ouvrir*") {
         $sc.Arguments = "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$ScriptPath`""
     } else {
@@ -42,6 +41,7 @@ function New-MindShortcut {
 
 New-MindShortcut -Name "Mettre a jour MIND" -ScriptPath $UpdatePs1
 New-MindShortcut -Name "Ouvrir MIND" -ScriptPath $OpenPs1
+New-MindShortcut -Name "Arreter MIND" -ScriptPath $StopPs1
 
 Write-Host ""
 Write-Host "Raccourcis crees sur le Bureau." -ForegroundColor Cyan
