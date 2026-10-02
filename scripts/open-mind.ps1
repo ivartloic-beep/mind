@@ -1,15 +1,15 @@
-# Ouvrir MIND - toujours le code Git via desktop:dev (pas l'ancien exe).
+# Ouvrir MIND - lance desktop:dev sans fenetre console.
 $ErrorActionPreference = "Continue"
 
-function Wait-Key {
-    Write-Host ""
-    Write-Host "Appuie sur une touche pour fermer..."
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-}
-
 function Fail([string]$Message) {
-    Write-Host $Message -ForegroundColor Red
-    Wait-Key
+    $log = Join-Path $env:TEMP "mind-open-error.txt"
+    Set-Content -Path $log -Value $Message -Encoding ascii
+    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-Command",
+        ("Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('" + $Message.Replace("'","''") + "','MIND')")
+    ) | Out-Null
     exit 1
 }
 
@@ -32,7 +32,6 @@ Set-Location -LiteralPath $Root
 
 foreach ($n in @("ma-tete", "Ma Tete", "mind")) {
     Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
-        Write-Host ("Arret process: " + $_.ProcessName + " PID " + $_.Id) -ForegroundColor Yellow
         Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
     }
 }
@@ -47,12 +46,8 @@ if (-not (Test-Path $devScript)) {
     Fail ("Script manquant: " + $devScript + " - fais git pull origin main")
 }
 
-Write-Host "Lancement MIND (code Git a jour, desktop:dev)..." -ForegroundColor Cyan
-Write-Host ("Dossier: " + $Root)
-Start-Process -FilePath "powershell.exe" -ArgumentList @(
+Start-Process -FilePath "powershell.exe" -WindowStyle Hidden -ArgumentList @(
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
-    "-NoExit",
     "-File", $devScript
-)
-Start-Sleep -Seconds 2
+) | Out-Null
