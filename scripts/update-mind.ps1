@@ -32,7 +32,7 @@ if ($LASTEXITCODE -ne 0) { throw "npm install a echoue" }
 
 Write-Host ""
 Write-Host "OK - code a jour. Utilise Ouvrir MIND (mode dev)." -ForegroundColor Green
-Write-Host "Gestion: Parametres (engrenage) -> URL API Gestion -> Se connecter -> Importer taches locales (si besoin)." -ForegroundColor Cyan
+Write-Host "Gestion: Parametres -> Se connecter (taches + projets sync). Importer taches locales si besoin. Capture = champs Gestion." -ForegroundColor Cyan
 Write-Host "Cloud mind.louetline.fr (optionnel): Parametres -> Cloud -> Token API." -ForegroundColor Cyan
 Write-Host "Appuie sur une touche pour fermer..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
