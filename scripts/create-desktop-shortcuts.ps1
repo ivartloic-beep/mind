@@ -25,7 +25,12 @@ function New-MindShortcut {
     $lnkPath = Join-Path $Desktop "$Name.lnk"
     $sc = $Wsh.CreateShortcut($lnkPath)
     $sc.TargetPath = "powershell.exe"
-    $sc.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+    # Ouvrir MIND : garder la fenetre si erreur ; update peut se fermer apres succes.
+    if ($Name -like "*Ouvrir*") {
+        $sc.Arguments = "-NoProfile -ExecutionPolicy Bypass -NoExit -File `"$ScriptPath`""
+    } else {
+        $sc.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
+    }
     $sc.WorkingDirectory = $Root
     $sc.WindowStyle = 1
     $sc.Description = $Name
