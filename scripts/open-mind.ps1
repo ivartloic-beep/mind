@@ -1,4 +1,4 @@
-# Ouvrir MIND — exe installe / release, sinon mode dev (fenetre visible si erreur).
+# Ouvrir MIND — exe installe / release, sinon mode dev.
 $ErrorActionPreference = "Continue"
 
 function Wait-Key {
@@ -13,7 +13,6 @@ function Fail([string]$Message) {
     exit 1
 }
 
-# PATH utilisateur (raccourci Bureau ne charge pas toujours Node/npm).
 $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
 if ($machinePath -and $userPath) {
@@ -27,12 +26,12 @@ if (-not (Test-Path (Join-Path $Root "package.json"))) {
     $Root = "C:\Users\Loic\mind"
 }
 if (-not (Test-Path (Join-Path $Root "package.json"))) {
-    Fail "Dossier projet introuvable. Attendu: C:\Users\Loic\mind"
+    Fail "Dossier projet introuvable: C:\Users\Loic\mind"
 }
-Set-Location $Root
+Set-Location -LiteralPath $Root
 
 function Find-MindExecutable {
-    $names = @("ma-tete.exe", "Ma Tête.exe", "Ma Tete.exe", "mind.exe")
+    $names = @("ma-tete.exe", "Ma Tete.exe", "mind.exe")
     $roots = @(
         (Join-Path $Root "src-tauri\target\release"),
         (Join-Path $Root "src-tauri\target\debug"),
@@ -51,10 +50,17 @@ function Find-MindExecutable {
                     Select-Object -First 1
                 if ($hit) { return $hit.FullName }
             } catch {
-                # ignore
             }
         }
     }
+
+    try {
+        $any = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA "Programs") -Filter "ma-tete.exe" -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($any) { return $any.FullName }
+    } catch {
+    }
+
     return $null
 }
 
@@ -65,29 +71,28 @@ if ($exe) {
         Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe -Parent)
         exit 0
     } catch {
-        Fail "Impossible de lancer l'exe: $_"
+        Fail ("Impossible de lancer l exe: " + $_.Exception.Message)
     }
 }
 
-Write-Host "Aucun exe trouve — mode dev (npm run desktop:dev)." -ForegroundColor Yellow
-Write-Host "Dossier: $Root"
+Write-Host "Aucun exe trouve - mode dev (npm run desktop:dev)." -ForegroundColor Yellow
+Write-Host ("Dossier: " + $Root)
 
 $npm = Get-Command npm -ErrorAction SilentlyContinue
 if (-not $npm) {
-    Fail @"
-npm introuvable dans le PATH.
-Installe Node.js 20+ ou ouvre un terminal ou Node est deja configure,
-puis relance depuis: cd $Root ; npm run desktop:dev
-"@
+    Fail "npm introuvable. Installe Node.js 20+ puis relance Ouvrir MIND."
 }
 
-# Nouvelle fenetre qui reste ouverte (logs Tauri visibles).
-$cmd = "Set-Location -LiteralPath '$Root'; npm run desktop:dev"
+$devScript = Join-Path $Root "scripts\open-mind-dev.ps1"
+if (-not (Test-Path $devScript)) {
+    Fail ("Script dev introuvable: " + $devScript)
+}
+
 Start-Process -FilePath "powershell.exe" -ArgumentList @(
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
     "-NoExit",
-    "-Command", $cmd
+    "-File", $devScript
 )
 Write-Host "Fenetre dev lancee." -ForegroundColor Green
 Start-Sleep -Seconds 2
