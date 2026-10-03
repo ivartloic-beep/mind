@@ -2850,8 +2850,10 @@ function saveCrmFicheFollowUp() {
 
 var CRM_BROWSE_PAGE_IDS = [
     'crmProspectsHubPage', 'crmProspectsBrowsePage', 'crmListsBrowsePage',
-    'crmStructuresBrowsePage', 'crmDealsBrowsePage', 'crmRelancesBrowsePage'
+    'crmStructuresBrowsePage', 'crmDealsBrowsePage', 'crmRelancesBrowsePage',
+    'crmPipelinePage'
 ];
+var crmV2RelancesWeekFilter = 'week';
 
 function crmHideBrowsePages() {
     CRM_BROWSE_PAGE_IDS.forEach(function(id) {
@@ -2984,6 +2986,48 @@ function closeCrmRelancesBrowsePage() {
     if (typeof renderCrmLists === 'function') renderCrmLists();
 }
 
+function openCrmPipelinePage() {
+    crmHideBrowsePages();
+    document.getElementById('crmPage').classList.remove('active');
+    var page = document.getElementById('crmPipelinePage');
+    if (page) page.classList.add('active');
+    if (crmV2PipelineLineId == null) crmV2PipelineLineId = CRM_PIPELINE_ALL;
+    renderCrmPipelineLineTabs();
+    if (typeof renderCrmKanban === 'function') renderCrmKanban();
+}
+
+function closeCrmPipelinePage() {
+    var page = document.getElementById('crmPipelinePage');
+    if (page) page.classList.remove('active');
+    document.getElementById('crmPage').classList.add('active');
+    if (typeof renderCrmLists === 'function') renderCrmLists();
+}
+
+function setCrmPipelineLine(lineId) {
+    crmV2PipelineLineId = lineId || CRM_PIPELINE_ALL;
+    renderCrmPipelineLineTabs();
+    if (typeof renderCrmKanban === 'function') renderCrmKanban();
+}
+
+function renderCrmPipelineLineTabs() {
+    var tabs = document.getElementById('crmPipelineLineTabs');
+    if (!tabs) return;
+    if (crmV2PipelineLineId == null) crmV2PipelineLineId = CRM_PIPELINE_ALL;
+    var lines = typeof getActiveCrmActivityLines === 'function' ? getActiveCrmActivityLines() : [];
+    var html = '<button type="button" class="crm-pipeline-tab crm-pipeline-tab--all' +
+        (crmV2PipelineLineId === CRM_PIPELINE_ALL ? ' active' : '') +
+        '" onclick="setCrmPipelineLine(\'' + CRM_PIPELINE_ALL + '\')">Toutes les lignes</button>';
+    html += lines.map(function(line) {
+        var color = line.color || '#4a90d9';
+        var active = crmV2PipelineLineId === line.id ? ' active' : '';
+        var label = typeof crmActivityLineLabel === 'function' ? crmActivityLineLabel(line) : (line.name || '');
+        return '<button type="button" class="crm-pipeline-tab' + active + '" style="--line-color:' +
+            String(color).replace(/"/g, '') + ';" onclick="setCrmPipelineLine(\'' +
+            String(line.id).replace(/'/g, "\\'") + '\')">' + escHtml(label) + '</button>';
+    }).join('');
+    tabs.innerHTML = html;
+}
+
 window.crmHideBrowsePages = crmHideBrowsePages;
 window.openCrmProspectsHub = openCrmProspectsHub;
 window.closeCrmProspectsHub = closeCrmProspectsHub;
@@ -2999,6 +3043,10 @@ window.openCrmDealsBrowsePage = openCrmDealsBrowsePage;
 window.closeCrmDealsBrowsePage = closeCrmDealsBrowsePage;
 window.openCrmRelancesBrowsePage = openCrmRelancesBrowsePage;
 window.closeCrmRelancesBrowsePage = closeCrmRelancesBrowsePage;
+window.openCrmPipelinePage = openCrmPipelinePage;
+window.closeCrmPipelinePage = closeCrmPipelinePage;
+window.setCrmPipelineLine = setCrmPipelineLine;
+window.renderCrmPipelineLineTabs = renderCrmPipelineLineTabs;
 
 // ========== Accueil CRM — Dossiers ==========
 
@@ -5437,13 +5485,55 @@ function setCrmRelancesBrowseScope(scope) {
     renderCrmRelancesBrowse();
 }
 
+function getCrmRelancesBrowseWeek() {
+    var active = document.querySelector('.crm-relances-week-tab.active');
+    return active ? active.getAttribute('data-week') : (crmV2RelancesWeekFilter || 'week');
+}
+
+function setCrmRelancesBrowseWeek(week) {
+    crmV2RelancesWeekFilter = week || 'week';
+    document.querySelectorAll('.crm-relances-week-tab').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-week') === crmV2RelancesWeekFilter);
+    });
+    renderCrmRelancesBrowse();
+}
+
+/** Début (lundi 00:00) et fin (dimanche 23:59:59.999) de la semaine courante. */
+function getCrmRelancesWeekBounds() {
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    var day = now.getDay(); // 0=dimanche
+    var diffToMon = day === 0 ? -6 : 1 - day;
+    var start = new Date(now);
+    start.setDate(now.getDate() + diffToMon);
+    var end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start: start, end: end, today: now };
+}
+
+function filterCrmRelancesByWeek(items, weekFilter) {
+    if (!weekFilter || weekFilter === 'all') return items;
+    var bounds = getCrmRelancesWeekBounds();
+    return items.filter(function(item) {
+        var d = crmParseFollowUpDate(item.date);
+        if (!d) return false;
+        if (weekFilter === 'overdue') return d < bounds.today;
+        if (weekFilter === 'week') return d >= bounds.start && d <= bounds.end;
+        if (weekFilter === 'later') return d > bounds.end;
+        return true;
+    });
+}
+
 function renderCrmRelancesBrowse() {
     var container = document.getElementById('crmRelancesBrowseList');
     if (!container) return;
     var scope = getCrmRelancesBrowseScope();
+    var weekFilter = getCrmRelancesBrowseWeek();
     var searchEl = document.getElementById('crmRelancesBrowseSearch');
     var search = (searchEl ? searchEl.value : '').toLowerCase().trim();
     var items = getCrmFollowUps({ mineOnly: scope === 'mine' });
+    items = filterCrmRelancesByWeek(items, weekFilter);
     if (search) {
         items = items.filter(function(item) {
             var hay = [item.title, item.subtitle, item.date, getCrmUserDisplayName(item.assigneeUserId)].join(' ').toLowerCase();
@@ -5457,7 +5547,13 @@ function renderCrmRelancesBrowse() {
             empty.style.display = '';
             var emptyText = empty.querySelector('div:nth-child(2)');
             if (emptyText) {
-                emptyText.textContent = scope === 'mine' ? 'Aucune relance assignée à vous' : 'Aucune relance planifiée';
+                var emptyByWeek = {
+                    week: 'Aucune relance cette semaine',
+                    overdue: 'Aucune relance en retard',
+                    later: 'Aucune relance après cette semaine',
+                    all: scope === 'mine' ? 'Aucune relance assignée à vous' : 'Aucune relance planifiée'
+                };
+                emptyText.textContent = emptyByWeek[weekFilter] || emptyByWeek.all;
             }
         }
         return;
@@ -5480,6 +5576,8 @@ function renderCrmRelancesWidget() {
 window.renderCrmRelancesBrowse = renderCrmRelancesBrowse;
 window.filterCrmRelancesBrowse = filterCrmRelancesBrowse;
 window.setCrmRelancesBrowseScope = setCrmRelancesBrowseScope;
+window.setCrmRelancesBrowseWeek = setCrmRelancesBrowseWeek;
+window.renderCrmKanban = renderCrmKanban;
 window.openCrmFollowUpModal = openCrmFollowUpModal;
 window.closeCrmFollowUpModal = closeCrmFollowUpModal;
 window.saveCrmFollowUpModal = saveCrmFollowUpModal;

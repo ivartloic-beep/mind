@@ -781,16 +781,24 @@ function exportAllInvitationsPDF() {
     }
 }
 
-// Génère un PDF unique avec toutes les invitations
+// PDF unique : document imprimable A4 (print → Enregistrer en PDF), sans Puppeteer
 async function generateSinglePDFWithAllInvitations() {
-    // TODO: Implémenter la génération PDF avec Puppeteer
-    alert('Génération PDF unique en cours de développement...');
+    if (!currentInvitations || currentInvitations.length === 0) {
+        alert('Aucune invitation à exporter');
+        return;
+    }
+    await openPrintableInvitationTickets(currentInvitations);
 }
 
-// Génère plusieurs PDFs (un par invitation)
+// Un document imprimable par invitation (fenêtres successives)
 async function generateMultiplePDFsForInvitations() {
-    // TODO: Implémenter la génération PDF avec Puppeteer
-    alert('Génération PDFs multiples en cours de développement...');
+    if (!currentInvitations || currentInvitations.length === 0) {
+        alert('Aucune invitation à exporter');
+        return;
+    }
+    for (var i = 0; i < currentInvitations.length; i++) {
+        await openPrintableInvitationTickets([currentInvitations[i]]);
+    }
 }
 
 // Génère le PDF d'une seule invitation

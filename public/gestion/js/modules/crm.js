@@ -420,6 +420,8 @@ function updateCrmHomeStats() {
     });
     var statDeals = document.getElementById('crmStatDeals');
     if (statDeals) statDeals.textContent = openDeals.length;
+    var statPipeline = document.getElementById('crmStatPipeline');
+    if (statPipeline) statPipeline.textContent = openDeals.length;
     var relances = typeof getCrmFollowUps === 'function' ? getCrmFollowUps({ mineOnly: true }) : [];
     var relancesToday = relances.filter(function(r) {
         return typeof crmIsFollowUpToday === 'function' && crmIsFollowUpToday(r.date);

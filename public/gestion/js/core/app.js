@@ -366,10 +366,12 @@ async function showApp() {
         if (typeof loadMyBureauData === 'function') await loadMyBureauData();
         if (typeof loadCrmData === 'function') await loadCrmData();
         applyPermissions();
-        // Messagerie (widget accueil + synchro temps réel hors page messagerie)
-        if (typeof loadConversations === 'function') await loadConversations();
-        if (typeof startMsgBackgroundSync === 'function') startMsgBackgroundSync();
-        if (typeof startMailsBackgroundSync === 'function') startMailsBackgroundSync();
+        // Messagerie / mails : absents en desktop MIND (scripts non chargés)
+        if (!window.__MIND_DESKTOP__) {
+            if (typeof loadConversations === 'function') await loadConversations();
+            if (typeof startMsgBackgroundSync === 'function') startMsgBackgroundSync();
+            if (typeof startMailsBackgroundSync === 'function') startMailsBackgroundSync();
+        }
         setTimeout(startSync, 5000);
         // Push window.notifications
         setTimeout(() => initPushNotifications(), 2000);
@@ -821,7 +823,7 @@ function closeAllPages() {
     document.querySelectorAll(OVERLAY_PAGE_SELECTORS).forEach(function(p) {
         p.classList.remove('active');
     });
-    const pagesToClose = ['evenementielHomePage', 'comptaHomePage', 'comptaValidationPage', 'comptaValidationNdfPage', 'comptaValidationFacturesPage', 'comptaValidationDevisPage', 'depotDevisPage', 'comptaDocsEmisPage', 'adminPage', 'comptaPage', 'depotJustificatifsPage', 'notesFraisPage', 'globalTasksPage', 'projectTasksPage', 'projectsListPage', 'workProjectsListPage', 'workProjectPage', 'previsionnelsListPage', 'previsionnelPage', 'usersPage', 'techPage', 'budgetPage', 'visuelsPage', 'documentsPage', 'projectNotesPage', 'communicationPage', 'communicationTourneePage', 'tourneeVisuelsPage', 'tourneeDocumentsPage', 'billetteriePage', 'tourneePage', 'spectaclePage', 'myBureauPage', 'bureauDoneTasksPage', 'noteEditorPage', 'ideaEditorPage', 'messageriePage', 'mailsPage', 'workspaceEditorPage', 'workspaceMindmapPage', 'workspaceDrawingPage', 'spectacleContactsPage', 'cataloguePage', 'catalogueFichePage', 'catalogueFolderPage', 'invitationsPage', 'crmPage', 'crmProspectsHubPage', 'crmProspectsBrowsePage', 'crmListsBrowsePage', 'crmStructuresBrowsePage', 'crmDealsBrowsePage', 'crmRelancesBrowsePage', 'crmListPage', 'crmProspectPage', 'crmStructurePage', 'crmDealPage', 'crmDealDocumentsPage', 'crmDealNotesPage', 'taskFichePage', 'adminCrmPage'];
+    const pagesToClose = ['evenementielHomePage', 'comptaHomePage', 'comptaValidationPage', 'comptaValidationNdfPage', 'comptaValidationFacturesPage', 'comptaValidationDevisPage', 'depotDevisPage', 'comptaDocsEmisPage', 'adminPage', 'comptaPage', 'depotJustificatifsPage', 'notesFraisPage', 'globalTasksPage', 'projectTasksPage', 'projectsListPage', 'workProjectsListPage', 'workProjectPage', 'previsionnelsListPage', 'previsionnelPage', 'usersPage', 'techPage', 'budgetPage', 'visuelsPage', 'documentsPage', 'projectNotesPage', 'communicationPage', 'communicationTourneePage', 'tourneeVisuelsPage', 'tourneeDocumentsPage', 'billetteriePage', 'tourneePage', 'spectaclePage', 'myBureauPage', 'bureauDoneTasksPage', 'noteEditorPage', 'ideaEditorPage', 'messageriePage', 'mailsPage', 'workspaceEditorPage', 'workspaceMindmapPage', 'workspaceDrawingPage', 'spectacleContactsPage', 'cataloguePage', 'catalogueFichePage', 'catalogueFolderPage', 'invitationsPage', 'crmPage', 'crmProspectsHubPage', 'crmProspectsBrowsePage', 'crmListsBrowsePage', 'crmStructuresBrowsePage', 'crmDealsBrowsePage', 'crmRelancesBrowsePage', 'crmPipelinePage', 'crmListPage', 'crmProspectPage', 'crmStructurePage', 'crmDealPage', 'crmDealDocumentsPage', 'crmDealNotesPage', 'taskFichePage', 'adminCrmPage'];
     pagesToClose.forEach(function(pageId) {
         const page = document.getElementById(pageId);
         if (page) page.classList.remove('active');
@@ -1193,7 +1195,7 @@ async function ensureGlobalSearchDataLoaded() {
     if (typeof ensureCrmDataLoaded === 'function') jobs.push(ensureCrmDataLoaded());
     if (typeof loadWorkProjectsData === 'function') jobs.push(loadWorkProjectsData());
     if (typeof loadMyBureauData === 'function') jobs.push(loadMyBureauData());
-    if (typeof loadConversations === 'function') jobs.push(loadConversations());
+    if (!window.__MIND_DESKTOP__ && typeof loadConversations === 'function') jobs.push(loadConversations());
     if (typeof loadCatalogueData === 'function' && (typeof catalogueData === 'undefined' || !catalogueData.length)) {
         jobs.push(loadCatalogueData());
     }

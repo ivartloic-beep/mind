@@ -31,7 +31,7 @@
     <link rel="stylesheet" href="css/modules/compta.css?v=20260703-57">
     <link rel="stylesheet" href="css/modules/messagerie.css?v=20260704-17">
     <link rel="stylesheet" href="css/modules/mails.css?v=20260706-10">
-    <link rel="stylesheet" href="css/modules/crm.css?v=20260707-19">
+    <link rel="stylesheet" href="css/modules/crm.css?v=20261003-p3">
     <link rel="stylesheet" href="css/modules/work-projects.css?v=20260704-09">
     <link rel="stylesheet" href="css/modules/catalogue.css?v=20260330-1">
     <link rel="stylesheet" href="css/modules/import-ventes.css?v=20260330-1">
@@ -4487,7 +4487,7 @@
 
     <!-- JavaScript Core -->
     <script src="js/desktop-bridge.js"></script>
-<script src="js/core/app.js?v=20260706-08"></script>
+<script src="js/core/app.js?v=20261003-p3"></script>
     <script src="js/core/api.js?v=20260709-03"></script>
     <script src="js/core/utils.js?v=20260704-18"></script>
 
@@ -4497,8 +4497,8 @@
 <script src="js/modules/evenementiel.js?v=20260703-63"></script>
 <script src="js/modules/spectacles.js?v=20261003-p2"></script>
     <script src="js/modules/bureau.js?v=20260709-05"></script>
-    <script src="js/modules/crm.js?v=20260707-18"></script>
-    <script src="js/modules/crm-v2.js?v=20261003-p2"></script>
+    <script src="js/modules/crm.js?v=20261003-p3"></script>
+    <script src="js/modules/crm-v2.js?v=20261003-p3"></script>
     <script src="js/modules/taches.js?v=20260709-05"></script>
     <script src="js/modules/work-projects.js?v=20261003-p2"></script>
     <script src="js/modules/tasks-unified.js?v=20260703-18"></script>
@@ -4508,13 +4508,19 @@
     <script src="js/modules/compta-validation.js?v=20260731-01"></script>
     <script src="js/modules/comptabilite-home.js?v=20261003-p2"></script>
     <script src="js/modules/home.js?v=20261003-p2"></script>
-    <script src="js/modules/messagerie.js?v=20260707-13"></script>
-    <script src="js/modules/mails.js?v=20260731-01"></script>
+    <script>
+    /* Desktop MIND : pas de messagerie/mails (~5.5k L) — recherche via global-search-entities.js */
+    if (!window.__MIND_DESKTOP__) {
+        document.write('<script src="js/modules/messagerie.js?v=20261003-p3"><\/script>');
+        document.write('<script src="js/modules/mails.js?v=20260731-01"><\/script>');
+    }
+    </script>
+    <script src="js/modules/global-search-entities.js?v=20261003-p3"></script>
     <script src="js/modules/task-fiche.js?v=20260709-04"></script>
     <script src="js/modules/catalogue.js?v=20260707-11"></script>
     <script src="js/modules/ai-chat.js?v=20260330-1"></script>
-    <script src="js/modules/entity-v2.js?v=20260703-59"></script>
-    <script src="js/modules/invitations.js?v=20260402-15"></script>
+    <script src="js/modules/entity-v2.js?v=20261003-p3"></script>
+    <script src="js/modules/invitations.js?v=20261003-p3"></script>
 
     <!-- ========== MODULE CRM - PAGES ========== -->
 
@@ -4574,6 +4580,7 @@
                     <details class="crm-more-actions">
                         <summary class="btn btn-secondary">Plus</summary>
                         <div class="crm-more-actions-menu">
+                            <button type="button" class="btn btn-secondary" onclick="openCrmPipelinePage()">📊 Pipeline</button>
                             <button type="button" class="btn btn-secondary" onclick="openCrmStructureModal()">+ Structure</button>
                             <button type="button" class="btn btn-secondary" onclick="openCrmListsManageModal()">📋 Listes</button>
                             <button type="button" class="btn btn-secondary" onclick="openCrmImportModal()">📥 Importer</button>
@@ -4600,6 +4607,11 @@
                     <div class="crm-stat-value" id="crmStatDeals">0</div>
                     <div class="crm-stat-label">Dossiers ouverts</div>
                 </div>
+                <div class="crm-stat crm-stat--clickable" role="button" tabindex="0" onclick="openCrmPipelinePage()" onkeydown="if(event.key==='Enter')openCrmPipelinePage()">
+                    <div class="crm-stat-icon">📊</div>
+                    <div class="crm-stat-value" id="crmStatPipeline">—</div>
+                    <div class="crm-stat-label">Pipeline</div>
+                </div>
                 <div class="crm-stat crm-stat--clickable crm-stat--relances" role="button" tabindex="0" onclick="openCrmRelancesBrowsePage()" onkeydown="if(event.key==='Enter')openCrmRelancesBrowsePage()">
                     <div class="crm-stat-icon">📅</div>
                     <div class="crm-stat-value" id="crmStatRelances">0</div>
@@ -4614,6 +4626,7 @@
                         <h2>Dossiers récents</h2>
                         <div class="crm-prospects-toolbar">
                             <button type="button" class="btn" onclick="openCrmDealModal()">+ Dossier</button>
+                            <button type="button" class="btn btn-secondary" onclick="openCrmPipelinePage()">Pipeline</button>
                             <button type="button" class="btn btn-secondary" onclick="openCrmDealsBrowsePage()">Voir tout →</button>
                         </div>
                     </div>
@@ -4839,12 +4852,39 @@
                     <button type="button" class="crm-relances-scope-tab" data-scope="all" onclick="setCrmRelancesBrowseScope('all')">Toutes</button>
                 </div>
             </div>
+            <div class="crm-relances-week-tabs" id="crmRelancesWeekTabs" aria-label="Filtrer par période">
+                <button type="button" class="crm-relances-week-tab active" data-week="week" onclick="setCrmRelancesBrowseWeek('week')">Cette semaine</button>
+                <button type="button" class="crm-relances-week-tab" data-week="overdue" onclick="setCrmRelancesBrowseWeek('overdue')">En retard</button>
+                <button type="button" class="crm-relances-week-tab" data-week="later" onclick="setCrmRelancesBrowseWeek('later')">Plus tard</button>
+                <button type="button" class="crm-relances-week-tab" data-week="all" onclick="setCrmRelancesBrowseWeek('all')">Toutes dates</button>
+            </div>
             <div id="crmRelancesBrowseList" class="crm-relances-grid"></div>
             <div class="crm-table-empty" id="crmRelancesBrowseEmpty" style="display:none;">
                 <div class="crm-table-empty-icon">📅</div>
                 <div>Aucune relance planifiée</div>
                 <button type="button" class="btn" style="margin-top:0.75rem;" onclick="openCrmFollowUpModal()">+ Planifier une relance</button>
             </div>
+        </div>
+    </div>
+
+    <!-- PAGE PIPELINE CRM (kanban) -->
+    <div id="crmPipelinePage" class="crm-page crm-pipeline-page">
+        <div class="crm-shell crm-shell--wide">
+            <header class="crm-hero">
+                <div class="crm-hero-top">
+                    <button type="button" class="crm-btn-back" onclick="closeCrmPipelinePage()">← Retour CRM</button>
+                    <div class="crm-hero-title-block">
+                        <h1>Pipeline</h1>
+                        <p class="crm-hero-sub" id="crmPipelineTotal">Dossiers ouverts par étape</p>
+                    </div>
+                </div>
+                <div class="crm-hero-actions">
+                    <button type="button" class="btn" onclick="openCrmDealModal()">+ Dossier</button>
+                    <button type="button" class="btn btn-secondary" onclick="openCrmPipelineStagesModal()">⚙️ Étapes</button>
+                </div>
+            </header>
+            <div class="crm-pipeline-tabs" id="crmPipelineLineTabs" aria-label="Filtrer par ligne d'activité"></div>
+            <div id="crmKanbanBoard" class="crm-kanban-board"></div>
         </div>
     </div>
 

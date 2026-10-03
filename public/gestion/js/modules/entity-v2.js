@@ -1,4 +1,6 @@
-// ========== L&Com Gestion — société unique L&Com ==========
+// ========== Gestion — société unique (sélecteur multi-société désactivé) ==========
+// API conservée pour compatibilité (normalizeUserSocieties / setCurrentEntity / isLcom).
+// L’identifiant interne « lcom » reste pour les payloads API existants ; ce n’est plus une marque UI.
 
 var currentEntity = 'lcom';
 
@@ -10,6 +12,7 @@ function setCurrentEntity(entity) {
     currentEntity = 'lcom';
 }
 
+/** Toujours vrai : instance mono-organisation. */
 function isLcom() {
     return true;
 }
@@ -31,13 +34,13 @@ function openCrmPageLcom() {
     if (typeof openCrmPage === 'function') openCrmPage();
 }
 
-/** Toutes les sections métier sont visibles (société unique). */
+/** Toutes les sections métier sont visibles (pas de filtrage par société). */
 function applySocietiesVisibility() {
     var homeSpaceWorkProjects = document.getElementById('homeSpaceWorkProjects');
     if (homeSpaceWorkProjects) homeSpaceWorkProjects.style.display = 'none';
 }
 
-/** Sélecteur société désactivé — tout est L&Com. */
+/** Sélecteur société désactivé — organisation unique configurable ailleurs. */
 function renderSocietySelector(containerId, options) {
     setCurrentEntity('lcom');
     var container = document.getElementById(containerId);
@@ -55,4 +58,7 @@ function renderSocietySelector(containerId, options) {
 if (typeof window !== 'undefined') {
     window.normalizeUserSocieties = normalizeUserSocieties;
     window.setCurrentEntity = setCurrentEntity;
+    window.isLcom = isLcom;
+    window.applySocietiesVisibility = applySocietiesVisibility;
+    window.renderSocietySelector = renderSocietySelector;
 }

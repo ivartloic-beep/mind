@@ -1735,6 +1735,10 @@
         .crm-relances-scope-tabs { display: flex; gap: 0.45rem; flex-shrink: 0; }
         .crm-relances-scope-tab { padding: 0.45rem 0.85rem; border-radius: 999px; border: 1px solid var(--mn-border); background: white; color: var(--mn-text-secondary); font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all var(--mn-transition); }
         .crm-relances-scope-tab.active { background: var(--mn-primary); border-color: var(--mn-primary); color: white; }
+        .crm-relances-week-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0 0 1rem; }
+        .crm-relances-week-tab { padding: 0.4rem 0.75rem; border-radius: 8px; border: 1px solid var(--mn-border); background: #f7f8fc; color: var(--mn-text-secondary); font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: all var(--mn-transition); }
+        .crm-relances-week-tab:hover { border-color: var(--mn-primary); color: var(--mn-primary); }
+        .crm-relances-week-tab.active { background: var(--mn-primary); border-color: var(--mn-primary); color: white; }
         .crm-relances-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
         .crm-relance-item { display: flex; flex-direction: column; gap: 0.65rem; padding: 0.75rem; border: 1px solid var(--mn-border); border-radius: var(--mn-radius); transition: all var(--mn-transition); }
         .crm-relance-item-main { flex: 1; cursor: pointer; min-width: 0; }
