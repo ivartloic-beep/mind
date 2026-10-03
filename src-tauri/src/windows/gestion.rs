@@ -332,8 +332,28 @@ const DOC_OPEN_PATCH: &str = r#"(function(){
   }
 })();"#;
 
-/// Script d’init (chaque navigation Gestion) — session + patch docs.
+/// Script d’init (chaque navigation Gestion) — session + patch docs + hors messagerie.
+/// `__MIND_DESKTOP__` est posé avant les scripts de la page distante pour skip messagerie/mails.
 const SESSION_BRIDGE_INIT: &str = r#"(function(){
+  // Toujours (y compris si le front distant n’a pas encore desktop-bridge.js)
+  window.__MIND_DESKTOP__ = true;
+
+  function hideMailAndMessaging() {
+    var ids = [
+      'navMessagerieItem', 'navMailsItem', 'messageriePage', 'mailsPage',
+      'msgFloatToggle', 'msgFloatWidget', 'homeMessagesWidget', 'homeIndicatorMessages'
+    ];
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    try {
+      document.querySelectorAll(
+        '.home-tile[onclick*="openMessagingPage"], .home-tile[onclick*="openMailsPage"], [data-permission="messagerie"], [data-permission="mails"]'
+      ).forEach(function(el) { el.style.display = 'none'; });
+    } catch (e) {}
+  }
+
   if (!window.__MIND_SESSION_BRIDGE__) {
     window.__MIND_SESSION_BRIDGE__ = true;
     function mindInvoke(cmd, args) {
@@ -375,6 +395,24 @@ const SESSION_BRIDGE_INIT: &str = r#"(function(){
     setTimeout(pushSession, 150);
     setTimeout(pushSession, 800);
     setTimeout(pushSession, 2000);
+
+    function bootHideMessaging() {
+      hideMailAndMessaging();
+      if (!document.body) return;
+      if (window.__MIND_MSG_HIDE_OBS__) return;
+      window.__MIND_MSG_HIDE_OBS__ = true;
+      try {
+        new MutationObserver(function() { hideMailAndMessaging(); })
+          .observe(document.body, { childList: true, subtree: true });
+      } catch (e) {}
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootHideMessaging);
+    } else {
+      bootHideMessaging();
+    }
+  } else {
+    hideMailAndMessaging();
   }
 })();"#;
 
