@@ -89,7 +89,7 @@ function createProfileModal() {
     sectionsList.forEach(section => {
         const sectionNames = {
             'bureau': 'Mon Bureau',
-            'espaces_travail': 'Espaces de travail (Projets)',
+            'espaces_travail': 'Espaces',
             'projets': 'Spectacles / Tournées',
             'projets_assignes': 'Spectacles (assignés uniquement)',
             'budget': 'Budget',
@@ -1083,11 +1083,18 @@ function applySettings() {
     refreshMainHeaderLogo();
     if (typeof updateHomeTiles === 'function') updateHomeTiles();
 
-    // Nom de l'app
-    if (appSettings.appName) {
-        document.getElementById('sidebarTitle').textContent = appSettings.appName;
-        document.getElementById('appNameInput').value = appSettings.appName;
-        document.title = appSettings.appName;
+    // Nom affiché (organisation / produit)
+    {
+        const displayName = (appSettings.appName || '').trim() || 'Gestion';
+        appSettings.appName = displayName;
+        const nameInput = document.getElementById('appNameInput');
+        if (nameInput) nameInput.value = displayName;
+        if (typeof applyAppDisplayName === 'function') applyAppDisplayName(displayName);
+        else {
+            const side = document.getElementById('sidebarTitle');
+            if (side) side.textContent = displayName;
+            document.title = displayName;
+        }
     }
     
     // Favicon dynamique (utiliser le logo de l'app)
@@ -2194,14 +2201,29 @@ async function uploadLogo(event) {
     }
 }
 
-// Gestion du nom de l'app
-function updateAppName() {
-    const name = document.getElementById('appNameInput').value.trim();
-    if (name) {
-        appSettings.appName = name;
-        document.getElementById('sidebarTitle').textContent = name;
-        saveSettings();
+// Nom affiché (organisation / instance) — défaut produit neutre « Gestion »
+function applyAppDisplayName(name) {
+    const display = (name || '').trim() || 'Gestion';
+    const side = document.getElementById('sidebarTitle');
+    if (side) side.textContent = display;
+    const top = document.getElementById('mnTopbarTitle');
+    if (top) top.textContent = display;
+    document.title = display;
+    try {
+        localStorage.setItem('appName', display);
+    } catch (e) {
+        /* ignore */
     }
+}
+if (typeof window !== 'undefined') window.applyAppDisplayName = applyAppDisplayName;
+
+function updateAppName() {
+    const input = document.getElementById('appNameInput');
+    const name = (input && input.value ? input.value : '').trim() || 'Gestion';
+    appSettings.appName = name;
+    if (input) input.value = name;
+    applyAppDisplayName(name);
+    saveSettings();
 }
 
 // Gestion des réseaux dans l'admin

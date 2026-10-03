@@ -98,6 +98,7 @@
         .home-tile.tile-bureau { --tile-color: var(--mn-dark-blue); --tile-bg: var(--mn-blue-light); }
         .home-tile.tile-projets { --tile-color: var(--mn-purple); --tile-bg: var(--mn-purple-light); }
         .home-tile.tile-work-projects { --tile-color: var(--mn-purple); --tile-bg: var(--mn-purple-light); }
+        .home-tile.tile-production { --tile-color: #c0392b; --tile-bg: #fdecea; }
         .home-tile.tile-compta { --tile-color: var(--mn-orange); --tile-bg: var(--mn-yellow-light); }
         .home-tile.tile-previs { --tile-color: var(--mn-teal); --tile-bg: #e6faff; }
         .home-tile.tile-admin { --tile-color: var(--mn-text-secondary); --tile-bg: var(--mn-border-light); }
@@ -166,6 +167,51 @@
             justify-content: center;
             margin-bottom: 0.25rem;
         }
+        .crm-more-actions {
+            position: relative;
+            display: inline-block;
+        }
+        .crm-more-actions > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+        .crm-more-actions > summary::-webkit-details-marker { display: none; }
+        .crm-more-actions-menu {
+            position: absolute;
+            top: calc(100% + 0.35rem);
+            right: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            min-width: 11rem;
+            padding: 0.5rem;
+            background: white;
+            border: 1px solid var(--mn-border);
+            border-radius: var(--mn-radius-lg);
+            box-shadow: var(--mn-shadow);
+        }
+        .crm-more-actions-menu .btn {
+            width: 100%;
+            justify-content: flex-start;
+        }
+        .bureau-source-chip {
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            padding: 0.12rem 0.4rem;
+            border-radius: 999px;
+            margin-right: 0.35rem;
+            background: var(--mn-border-light, #eef1f4);
+            color: var(--mn-text-secondary);
+        }
+        .bureau-source-chip.is-personal { background: #e8f1ff; color: #1d4f91; }
+        .bureau-source-chip.is-espace { background: #f3e8ff; color: #6b21a8; }
+        .bureau-source-chip.is-crm { background: #e7f6ef; color: #0f6e5c; }
+        .bureau-source-chip.is-production { background: #fdecea; color: #9b1c1c; }
 
         .module-home-back-row {
             max-width: 1200px; margin: 0 auto 1rem; padding: 0 1rem; text-align: left;

@@ -543,8 +543,26 @@ function bureauUnifiedOpenAttr(task, esc) {
 function bureauUnifiedDossierIcon(source) {
     if (source === 'work_project') return '📁 ';
     if (source === 'crm_deal') return '📂 ';
+    if (source === 'spectacle' || source === 'production') return '🎭 ';
     return '';
 }
+
+function bureauUnifiedSourceChip(source) {
+    if (source === 'personal') {
+        return '<span class="bureau-source-chip is-personal">Perso</span>';
+    }
+    if (source === 'work_project') {
+        return '<span class="bureau-source-chip is-espace">Espace</span>';
+    }
+    if (source === 'crm_deal') {
+        return '<span class="bureau-source-chip is-crm">CRM</span>';
+    }
+    if (source === 'spectacle' || source === 'production') {
+        return '<span class="bureau-source-chip is-production">Production</span>';
+    }
+    return '';
+}
+window.bureauUnifiedSourceChip = bureauUnifiedSourceChip;
 
 function formatBureauUnifiedDueDate(dueDate) {
     if (!dueDate) return '<span class="bureau-unified-task-due">Sans échéance</span>';
@@ -573,6 +591,7 @@ function renderBureauUnifiedTasksListHtml(tasks, options) {
         const st = normalizeBureauTaskStatus(task.status, task.completed);
         const isDone = st === 'done';
         const isInProgress = st === 'in_progress';
+        const sourceChip = bureauUnifiedSourceChip(task.source);
         const dossierHtml = task.dossierName
             ? '<span class="bureau-unified-task-dossier">' + bureauUnifiedDossierIcon(task.source) + escapeHtml(task.dossierName) + '</span>'
             : '';
@@ -607,7 +626,7 @@ function renderBureauUnifiedTasksListHtml(tasks, options) {
             checkboxHtml +
             '<div class="bureau-task-content" onclick="event.stopPropagation();' + openAttr + '" style="cursor:pointer;flex:1;">' +
             '<div class="bureau-task-title">' + escapeHtml(task.title) + '</div>' +
-            '<div class="bureau-task-meta">' + statusBadge + formatBureauUnifiedDueDate(task.dueDate) + dossierHtml + assigneeHtml + '</div>' +
+            '<div class="bureau-task-meta">' + sourceChip + statusBadge + formatBureauUnifiedDueDate(task.dueDate) + dossierHtml + assigneeHtml + '</div>' +
             completedInfo +
             '</div>' + deleteBtn + '</div>';
     }).join('');
@@ -633,9 +652,7 @@ function renderBureauKanbanCard(task, options) {
     const dossierBadge = task.dossierName
         ? '<span class="kanban-card-badge">' + bureauUnifiedDossierIcon(task.source) + escapeHtml(task.dossierName) + '</span>'
         : '';
-    const sourceBadge = task.source === 'personal'
-        ? '<span class="kanban-card-badge">🔒 Perso</span>'
-        : (task.source === 'work_project' ? '<span class="kanban-card-badge">📁 Projet</span>' : '');
+    const sourceBadge = bureauUnifiedSourceChip(task.source);
     const assigneeBadge = showAssignees && typeof renderAssigneeBadges === 'function'
         ? '<span class="kanban-card-badge bureau-kanban-assignees">' + renderAssigneeBadges(task.assignedTo || []) + '</span>'
         : '';

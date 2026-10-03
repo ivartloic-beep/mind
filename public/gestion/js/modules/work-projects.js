@@ -360,7 +360,7 @@ function openWorkProjectModal(projectId) {
     var pid = projectId != null && projectId !== '' ? String(projectId) : '';
     wpEditingProject = pid ? getWorkProjectById(pid) : null;
     wpFormPendingImage = undefined;
-    document.getElementById('wpModalTitle').textContent = wpEditingProject ? '✏️ Modifier le projet' : '📁 Nouveau projet';
+    document.getElementById('wpModalTitle').textContent = wpEditingProject ? '✏️ Modifier l’espace' : '📁 Nouvel espace';
     document.getElementById('wpFormTitle').value = wpEditingProject ? wpEditingProject.title : '';
     document.getElementById('wpFormDescription').value = wpEditingProject ? (wpEditingProject.description || '') : '';
     document.getElementById('wpFormColor').value = wpEditingProject ? (wpEditingProject.color || '#4a90d9') : '#4a90d9';
@@ -1916,7 +1916,7 @@ function wpGlobalSearch(query, results, pushResult) {
                 icon: p.icon || '📁',
                 imageUrl: imgUrl || null,
                 title: p.title,
-                subtitle: 'Projets · Espace de travail',
+                subtitle: 'Espaces · Travail collaboratif',
                 action: function() { openWorkProjectPage(p.id); }
             });
         }
@@ -1926,7 +1926,7 @@ function wpGlobalSearch(query, results, pushResult) {
                     type: 'tâche',
                     icon: '✅',
                     title: t.title,
-                    subtitle: 'Projets · ' + p.title,
+                    subtitle: 'Espaces · ' + p.title,
                     action: function() {
                         if (typeof openTaskFiche === 'function') openTaskFiche('work_project', p.id, t.id);
                         else { openWorkProjectPage(p.id); switchWpTab('tasks'); }

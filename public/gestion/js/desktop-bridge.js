@@ -41,6 +41,8 @@
       "mailsPage",
       "msgFloatToggle",
       "msgFloatWidget",
+      "homeMessagesWidget",
+      "homeIndicatorMessages",
     ];
     ids.forEach(function (id) {
       var el = document.getElementById(id);
@@ -53,6 +55,19 @@
       .forEach(function (el) {
         el.style.display = "none";
       });
+  }
+
+  function applyNeutralBrand() {
+    var hardcoded = /^(MIND\s*Gestion|L&CO\s*Gestion|L&Com\s*Gestion)$/i;
+    ["sidebarTitle", "mnTopbarTitle"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && hardcoded.test((el.textContent || "").trim())) {
+        el.textContent = "Gestion";
+      }
+    });
+    if (hardcoded.test((document.title || "").trim()) || !document.title) {
+      document.title = "Gestion";
+    }
   }
 
   function renameEvenementielToProduction() {
@@ -74,10 +89,7 @@
         el.textContent = (el.textContent || "").replace("Événementiel", "Production");
       }
     });
-    var sideTitle = document.getElementById("sidebarTitle");
-    if (sideTitle && /Gestion/i.test(sideTitle.textContent || "")) {
-      /* keep brand unless empty */
-    }
+    applyNeutralBrand();
   }
 
   function showApiBannerIfNeeded() {

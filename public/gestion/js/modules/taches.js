@@ -3041,6 +3041,7 @@ async function openMyBureauTasks() {
     if (tachesItem) tachesItem.classList.add('active');
     if (typeof renderBureauUnifiedTasks === 'function') renderBureauUnifiedTasks();
 }
+if (typeof window !== 'undefined') window.openMyBureauTasks = openMyBureauTasks;
 
 let globalTasksFilter = {
     project: 'all',

@@ -14,7 +14,7 @@ function evenementielGlobalSearchAppend(query, results, pushResult) {
             type: label.toLowerCase(),
             icon: icon,
             title: p.name || 'Sans nom',
-            subtitle: 'Événementiel · ' + label + (lieu ? ' · ' + lieu : ''),
+            subtitle: 'Production · ' + label + (lieu ? ' · ' + lieu : ''),
             action: function() {
                 if (typeof closeAllPages === 'function') closeAllPages();
                 if (isSpectacle && typeof viewSpectacle === 'function') viewSpectacle(p.id);
@@ -28,7 +28,7 @@ function evenementielGlobalSearchAppend(query, results, pushResult) {
                 type: 'tâche',
                 icon: '✅',
                 title: t.title,
-                subtitle: 'Événementiel · ' + label + ' · ' + (p.name || ''),
+                subtitle: 'Production · ' + label + ' · ' + (p.name || ''),
                 action: function() {
                     if (typeof closeAllPages === 'function') closeAllPages();
                     if (isSpectacle && typeof viewSpectacle === 'function') viewSpectacle(p.id);
@@ -132,6 +132,8 @@ function updateEvenementielNavVisibility() {
         if (tile.style.display !== 'none') anyVisible = true;
     });
     if (nav) nav.style.display = anyVisible ? '' : 'none';
+    var homeTile = document.getElementById('homeTileProduction');
+    if (homeTile) homeTile.style.display = anyVisible ? '' : 'none';
 }
 
 function setEvenementielNavActive() {

@@ -286,8 +286,12 @@ async function loadLoginBranding() {
         }
 
         if (data.app_name) {
-            document.title = data.app_name;
-            try { localStorage.setItem('appName', data.app_name); } catch (e) {}
+            if (typeof applyAppDisplayName === 'function') {
+                applyAppDisplayName(data.app_name);
+            } else {
+                document.title = data.app_name;
+                try { localStorage.setItem('appName', data.app_name); } catch (e) {}
+            }
         }
         if (logoSrc) {
             try { localStorage.setItem('appLogo', logoSrc); } catch (e) {}

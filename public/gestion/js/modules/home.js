@@ -133,8 +133,6 @@ function updateHomeTiles() {
         titleEl.textContent = `Bonjour ${prenom} !`;
     }
 
-    if (typeof updateMsgBadges === 'function') updateMsgBadges();
-
     document.querySelectorAll('.home-tile[data-permission]').forEach(tile => {
         const perm = tile.dataset.permission;
         if (window.hasPermission) {
@@ -148,8 +146,8 @@ function updateHomeTiles() {
     if (typeof updateWorkProjectsNavVisibility === 'function') updateWorkProjectsNavVisibility();
 
     renderHomeTasksList();
-    renderHomeMessagesWidget();
     if (typeof renderHomeRelancesWidget === 'function') renderHomeRelancesWidget();
+    updateHomeRelancesIndicator();
 }
 
 async function renderHomeTasksList(options) {
@@ -240,6 +238,30 @@ function renderHomeMessagesWidget() {
         </div>`;
     }).join('');
 }
+
+function updateHomeRelancesIndicator() {
+    const indicator = document.getElementById('homeIndicatorRelances');
+    const countEl = document.getElementById('homeIndicatorRelancesCount');
+    if (!indicator) return;
+    const canCrm = typeof hasCrmAccess === 'function' ? hasCrmAccess() : false;
+    indicator.style.display = canCrm ? '' : 'none';
+    if (!countEl || !canCrm) return;
+    let n = 0;
+    try {
+        if (typeof getCrmFollowUps === 'function' && typeof crmIsFollowUpToday === 'function') {
+            n = getCrmFollowUps({ mineOnly: true }).filter(function(r) {
+                return crmIsFollowUpToday(r.date);
+            }).length;
+        } else {
+            const stat = document.getElementById('crmStatRelances');
+            if (stat) n = parseInt(stat.textContent, 10) || 0;
+        }
+    } catch (e) {
+        n = 0;
+    }
+    countEl.textContent = String(n);
+}
+window.updateHomeRelancesIndicator = updateHomeRelancesIndicator;
 
 function escapeHtml(s) {
     if (!s) return '';

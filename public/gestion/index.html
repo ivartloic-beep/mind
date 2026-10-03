@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>L&Com Gestion</title>
+    <title>Gestion</title>
     <link rel="icon" type="image/png" id="dynamicFavicon" href="">
     
     <!-- PWA Meta Tags -->
@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="L&Com Gestion">
+    <meta name="apple-mobile-web-app-title" content="Gestion">
     <link rel="apple-touch-icon" href="./icons/icon-152.png?v=20260330-1">
     
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800;900&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -53,7 +53,7 @@
             <div class="sidebar-logo" id="sidebarLogo">
                 🎭
             </div>
-            <div class="sidebar-title" id="sidebarTitle">MIND Gestion</div>
+            <div class="sidebar-title" id="sidebarTitle">Gestion</div>
         </div>
         
         <div class="sidebar-nav">
@@ -67,6 +67,10 @@
                     <span class="nav-item-icon">💼</span>
                     <span>Mon Bureau</span>
                 </div>
+                <div class="nav-item" id="navTasksItem" onclick="openMyBureauTasks()" style="display: none;">
+                    <span class="nav-item-icon">✅</span>
+                    <span>Mes tâches</span>
+                </div>
                 <div class="nav-item" id="navMessagerieItem" onclick="openMessagingPage()" style="display:none !important" hidden>
                     <span class="nav-item-icon">💬</span>
                     <span class="nav-item-label">Messagerie</span>
@@ -79,7 +83,7 @@
                 </div>
                 <div class="nav-item" id="navWorkProjectsDashboard" onclick="openWorkProjectsListPage()">
                     <span class="nav-item-icon">📁</span>
-                    <span>Projets</span>
+                    <span>Espaces</span>
                 </div>
                 <div class="nav-item" id="navEvenementielItem" onclick="openEvenementielHomePage()" style="display: none;">
                     <span class="nav-item-icon">🎭</span>
@@ -118,10 +122,10 @@
     <div class="main-content" id="mainContent">
         <!-- Topbar Monday (visible when logged-in) -->
         <div class="mn-topbar" id="mnTopbar" style="display: none;">
-            <span class="mn-topbar-title">L&CO Gestion</span>
+            <span class="mn-topbar-title" id="mnTopbarTitle">Gestion</span>
             <span class="mn-topbar-breadcrumb" id="mnTopbarBreadcrumb"><span>›</span> Accueil</span>
             <div class="mn-search-bar">
-                <input type="text" id="searchGlobalInput" placeholder="Rechercher partout : prospects, structures, dossiers, tâches, projets, documents, messages, compta…" oninput="handleGlobalSearch(this.value)" onfocus="showSearchResults()" autocomplete="off">
+                <input type="text" id="searchGlobalInput" placeholder="Rechercher partout : prospects, structures, dossiers, tâches, espaces, documents, compta…" oninput="handleGlobalSearch(this.value)" onfocus="showSearchResults()" autocomplete="off">
             </div>
             <div class="mn-topbar-actions">
                 <button type="button" class="mn-topbar-btn" title="Aide">❓</button>
@@ -161,46 +165,50 @@
                     
                     <!-- Indicateurs synthétiques -->
                     <div class="home-indicators" id="homeIndicators">
-                        <div class="home-indicator" onclick="openMyBureauPage()" id="homeIndicatorTasks">
+                        <div class="home-indicator" onclick="openMyBureauTasks()" id="homeIndicatorTasks">
                             <span class="home-indicator-value" id="homeIndicatorTasksCount">0</span>
                             <span class="home-indicator-label">Tâches à faire</span>
                         </div>
-                        <div class="home-indicator" onclick="openMessagingPage()" id="homeIndicatorMessages">
-                            <span class="home-indicator-value" id="homeIndicatorMessagesCount">0</span>
-                            <span class="home-indicator-label">Messages non lus</span>
+                        <div class="home-indicator" onclick="openCrmRelancesBrowsePageFromAppHome()" id="homeIndicatorRelances" style="display:none;">
+                            <span class="home-indicator-value" id="homeIndicatorRelancesCount">0</span>
+                            <span class="home-indicator-label">Relances du jour</span>
                         </div>
                     </div>
                     
                     <!-- Recherche globale (masquée quand topbar visible) -->
                     <div class="search-global-container" id="searchGlobalContainer">
                         <span class="search-global-icon">🔍</span>
-                        <input type="text" class="search-global-input" placeholder="Rechercher partout : prospects, structures, dossiers, tâches, projets, documents, messages, compta…" oninput="handleGlobalSearch(this.value)" onfocus="showSearchResults()" autocomplete="off">
+                        <input type="text" class="search-global-input" placeholder="Rechercher partout : prospects, structures, dossiers, tâches, espaces, documents, compta…" oninput="handleGlobalSearch(this.value)" onfocus="showSearchResults()" autocomplete="off">
                     </div>
                     
-                    <!-- Espace PERSO -->
+                    <!-- Carte des modules -->
                     <div class="home-space" id="homeSpacePerso">
-                        <h3 class="home-space-title">Espace personnel</h3>
+                        <h3 class="home-space-title">Modules</h3>
                         <div class="home-tiles">
                             <div class="home-tile tile-bureau" onclick="openMyBureauPage()" data-permission="bureau">
                                 <span class="home-tile-icon">💼</span>
-                                <span class="home-tile-label">Mon Bureau</span>
+                                <span class="home-tile-label">Bureau</span>
                                 <span class="home-tile-desc">Tâches, notes, idées</span>
-                            </div>
-                            <div class="home-tile tile-messaging" onclick="openMessagingPage()">
-                                <span class="home-tile-icon">💬</span>
-                                <span class="home-tile-label">Messagerie</span>
-                                <span class="home-tile-desc">Conversations</span>
-                                <span class="home-tile-badge" id="msgHomeBadge" style="display: none;">0</span>
                             </div>
                             <div class="home-tile tile-work-projects" id="homeTileWorkProjects" onclick="openWorkProjectsListPage()">
                                 <span class="home-tile-icon">📁</span>
-                                <span class="home-tile-label">Projets</span>
-                                <span class="home-tile-desc">Espaces de travail collaboratifs</span>
+                                <span class="home-tile-label">Espaces</span>
+                                <span class="home-tile-desc">Travail collaboratif</span>
+                            </div>
+                            <div class="home-tile tile-production" id="homeTileProduction" onclick="openEvenementielHomePage()" style="display:none;">
+                                <span class="home-tile-icon">🎭</span>
+                                <span class="home-tile-label">Production</span>
+                                <span class="home-tile-desc">Tournées et spectacles</span>
                             </div>
                             <div class="home-tile tile-crm" id="homeTileCrm" onclick="openCrmPage()">
                                 <span class="home-tile-icon">🏢</span>
                                 <span class="home-tile-label">CRM</span>
                                 <span class="home-tile-desc">Contacts, dossiers et relances</span>
+                            </div>
+                            <div class="home-tile tile-compta" id="homeTileCompta" onclick="openComptabiliteHomePage()">
+                                <span class="home-tile-icon">💰</span>
+                                <span class="home-tile-label">Compta</span>
+                                <span class="home-tile-desc">NDF, devis et factures</span>
                             </div>
                         </div>
                         <div class="home-widgets-grid">
@@ -208,17 +216,9 @@
                         <div class="home-widget home-tasks-widget" id="homeTasksWidget">
                             <div class="home-widget-header">
                                 <h3>Mes tâches à faire</h3>
-                                <button type="button" class="btn btn-link" onclick="openMyBureauPage()">Voir tout</button>
+                                <button type="button" class="btn btn-link" onclick="openMyBureauTasks()">Voir tout</button>
                             </div>
                             <div id="homeTasksList" class="home-tasks-list"></div>
-                        </div>
-                        <!-- Widget Derniers messages -->
-                        <div class="home-widget home-messages-widget" id="homeMessagesWidget">
-                            <div class="home-widget-header">
-                                <h3>Messages non lus <span class="home-messages-unread-total" id="homeMessagesUnreadBadge" style="display: none;">0</span></h3>
-                                <button type="button" class="btn btn-link" onclick="openMessagingPage()">Voir tout</button>
-                            </div>
-                            <div id="homeMessagesList" class="home-messages-list"></div>
                         </div>
                         <!-- Widget Prochaines relances CRM -->
                         <div class="home-widget home-relances-widget" id="homeRelancesWidget" style="display:none;">
@@ -929,8 +929,8 @@
                     <input type="file" id="logoInput" accept="image/*" style="display: none;" onchange="uploadLogo(event)">
                     <button class="btn btn-secondary" onclick="document.getElementById('logoInput').click()">📤 Changer le logo</button>
                     <div class="form-group" style="max-width: 400px; margin: 2rem auto 0;">
-                        <label>Nom de l'application</label>
-                        <input type="text" id="appNameInput" placeholder="Nom de votre entreprise" onchange="updateAppName()">
+                        <label>Nom affiché (organisation)</label>
+                        <input type="text" id="appNameInput" placeholder="ex. nom de votre société — défaut : Gestion" onchange="updateAppName()">
                     </div>
                 </div>
             </div>
@@ -1754,22 +1754,22 @@
         </div>
     </div>
 
-    <!-- LISTE ESPACES DE TRAVAIL (Projets L&Com) -->
+    <!-- LISTE ESPACES DE TRAVAIL -->
     <div id="workProjectsListPage" class="wp-list-page module-home-page">
         <div class="home-welcome module-home-welcome">
             <div class="module-page-header">
-                <h1 class="home-welcome-title">Projets</h1>
-                <p class="home-welcome-subtitle"><span id="wpListCount">0</span> projet(s) actif(s)</p>
+                <h1 class="home-welcome-title">Espaces</h1>
+                <p class="home-welcome-subtitle"><span id="wpListCount">0</span> espace(s) actif(s)</p>
             </div>
             <div class="module-home-action-row">
-                <button type="button" class="btn" onclick="openWorkProjectModal()">+ Nouveau projet</button>
+                <button type="button" class="btn" onclick="openWorkProjectModal()">+ Nouvel espace</button>
             </div>
         </div>
         <div class="module-home-content wp-container">
-            <input type="text" class="wp-search" placeholder="🔍 Rechercher un projet..." oninput="filterWorkProjectsList(this.value)">
+            <input type="text" class="wp-search" placeholder="🔍 Rechercher un espace…" oninput="filterWorkProjectsList(this.value)">
             <div class="wp-grid" id="workProjectsGrid"></div>
             <div class="wp-empty" id="workProjectsEmpty" style="display: none;">
-                <p>Aucun espace de travail. Créez votre premier dossier projet.</p>
+                <p>Aucun espace. Créez votre premier espace de travail.</p>
             </div>
         </div>
     </div>
@@ -1842,7 +1842,7 @@
     <!-- MODALES ESPACES DE TRAVAIL -->
     <div id="wpProjectModal" class="modal">
         <div class="modal-content" style="max-width:520px;">
-            <h2 id="wpModalTitle">📁 Nouveau projet</h2>
+            <h2 id="wpModalTitle">📁 Nouvel espace</h2>
             <form onsubmit="saveWorkProjectForm(event)">
                 <div class="form-group"><label>Titre *</label><input type="text" id="wpFormTitle" required maxlength="150"></div>
                 <div class="form-group"><label>Description</label><textarea id="wpFormDescription" rows="3" style="width:100%;padding:0.6rem;border:1px solid #e2e8f0;border-radius:10px;"></textarea></div>
@@ -3930,7 +3930,7 @@
             <!-- Header -->
             <div class="tasks-header">
                 <div class="tasks-header-top">
-                    <h2>📋 Toutes les tâches</h2>
+                    <h2>✅ Mes tâches</h2>
                     <button class="btn" onclick="openTaskModalFromContext()">
                         <span style="margin-right: 0.5rem;">✨</span> Nouvelle tâche
                     </button>
@@ -4561,13 +4561,19 @@
                     <p class="home-welcome-subtitle">Prospects, dossiers commerciaux et relances</p>
                 </div>
                 <div class="module-home-actions crm-module-actions">
-                    <button type="button" class="btn" onclick="openCrmStructureModal()">+ Structure</button>
                     <button type="button" class="btn" onclick="openCrmProspectModalFromHome()">+ Prospect</button>
-                    <button type="button" class="btn btn-secondary" onclick="openCrmListsManageModal()">📋 Listes</button>
-                    <button type="button" class="btn btn-secondary" onclick="openCrmImportModal()">📥 Importer</button>
-                    <button type="button" class="btn btn-secondary" onclick="openCrmDealModal()">+ Dossier</button>
-                    <button type="button" class="btn btn-secondary" onclick="openCrmExportModal()">📤 Exporter</button>
-                    <button type="button" class="btn btn-secondary" id="crmAccessBtn" onclick="openCrmAccessModal()" title="Gérer les accès CRM">🔒 Accès</button>
+                    <button type="button" class="btn" onclick="openCrmDealModal()">+ Dossier</button>
+                    <button type="button" class="btn" onclick="openCrmRelancesBrowsePage()">📅 Relances</button>
+                    <details class="crm-more-actions">
+                        <summary class="btn btn-secondary">Plus</summary>
+                        <div class="crm-more-actions-menu">
+                            <button type="button" class="btn btn-secondary" onclick="openCrmStructureModal()">+ Structure</button>
+                            <button type="button" class="btn btn-secondary" onclick="openCrmListsManageModal()">📋 Listes</button>
+                            <button type="button" class="btn btn-secondary" onclick="openCrmImportModal()">📥 Importer</button>
+                            <button type="button" class="btn btn-secondary" onclick="openCrmExportModal()">📤 Exporter</button>
+                            <button type="button" class="btn btn-secondary" id="crmAccessBtn" onclick="openCrmAccessModal()" title="Gérer les accès CRM">🔒 Accès</button>
+                        </div>
+                    </details>
                 </div>
                 <div class="crm-global-search-wrap">
                     <input type="text" id="crmGlobalSearch" placeholder="Rechercher un prospect, une structure ou un dossier…" oninput="crmGlobalSearch(this.value)" autocomplete="off">
@@ -7271,7 +7277,7 @@
         <div class="install-banner-content">
             <img src="./icons/icon-72.png" alt="Logo" class="install-banner-icon" onerror="this.style.display='none'">
             <div class="install-banner-text">
-                <strong>Installer L&CO Gestion</strong>
+                <strong>Installer Gestion</strong>
                 <span>Accès rapide depuis votre écran d'accueil</span>
             </div>
         </div>

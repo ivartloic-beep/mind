@@ -168,7 +168,7 @@ if (!window.lastSettingsSyncTime) {
 if (!window.appSettings) {
     window.appSettings = {
     logo: null,
-    appName: 'L&Com Gestion',
+    appName: 'Gestion',
     reseauxBilletterie: [],
     // Nouvelles bases de données
     equipeInterne: [],      // {id, nom, prenom, roles[], telephone, email}
@@ -719,7 +719,8 @@ function applyPermissions() {
     // Masquer/afficher les éléments de navigation selon les permissions
     const navTasksItem = document.getElementById('navTasksItem');
     if (navTasksItem) {
-        navTasksItem.style.display = hasPermission('taches') ? 'flex' : 'none';
+        const canTasks = hasPermission('bureau') || hasPermission('taches');
+        navTasksItem.style.display = canTasks ? 'flex' : 'none';
     }
     
     const homeTasksWidget = document.getElementById('homeTasksWidget');
@@ -864,7 +865,8 @@ window.onload = async function() {
             if (favicon) favicon.href = cachedLogo;
         }
         if (cachedName) {
-            document.title = cachedName;
+            if (typeof applyAppDisplayName === 'function') applyAppDisplayName(cachedName);
+            else document.title = cachedName;
         }
     }
     

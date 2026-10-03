@@ -3194,6 +3194,7 @@ async function renderHomeRelancesWidget() {
     if (!container) return;
     if (typeof hasCrmAccess === 'function' && !hasCrmAccess()) {
         if (widget) widget.style.display = 'none';
+        if (typeof updateHomeRelancesIndicator === 'function') updateHomeRelancesIndicator();
         return;
     }
     if (widget) widget.style.display = '';
@@ -3203,11 +3204,13 @@ async function renderHomeRelancesWidget() {
     var items = getCrmHomeUpcomingRelances(5);
     if (!items.length) {
         container.innerHTML = '<div class="home-widget-empty"><span class="home-widget-empty-icon">📅</span><p>Aucune relance assignée à vous</p></div>';
+        if (typeof updateHomeRelancesIndicator === 'function') updateHomeRelancesIndicator();
         return;
     }
     container.innerHTML = items.map(function(item) {
         return buildCrmRelanceCardHtml(item, { fromAppHome: true });
     }).join('');
+    if (typeof updateHomeRelancesIndicator === 'function') updateHomeRelancesIndicator();
 }
 
 window.renderCrmHomeRelances = renderCrmHomeRelances;

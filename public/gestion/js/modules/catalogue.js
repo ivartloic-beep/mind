@@ -1498,7 +1498,7 @@ function catalogueGlobalSearchAppend(query, results, pushResult) {
             type: 'catalogue',
             icon: '📚',
             title: f.name || 'Fiche catalogue',
-            subtitle: 'Événementiel · Catalogue' + (f.genre ? ' · ' + f.genre : ''),
+            subtitle: 'Production · Catalogue' + (f.genre ? ' · ' + f.genre : ''),
             action: function() {
                 if (typeof openEvenementielHomePage === 'function') openEvenementielHomePage();
                 setTimeout(function() {

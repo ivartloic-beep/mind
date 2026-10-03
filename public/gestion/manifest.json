@@ -1,7 +1,7 @@
 {
-    "name": "L&Com Gestion",
-    "short_name": "L&Com Gestion",
-    "description": "Gérez vos productions, budgets et billetterie",
+    "name": "Gestion",
+    "short_name": "Gestion",
+    "description": "Bureau, espaces, production, CRM et comptabilité",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#1a1a2e",
