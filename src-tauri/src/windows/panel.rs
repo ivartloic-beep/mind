@@ -7,9 +7,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 
 pub const PANEL_LABEL: &str = "panel";
-pub const PANEL_CONTENT_WIDTH: f64 = 400.0;
+/// Largeur totale fenêtre (~2/3 de l’ancien 400).
+pub const PANEL_CONTENT_WIDTH: f64 = 268.0;
 /// Bandeau gauche du panneau ouvert (fermer).
-pub const HANDLE_WIDTH: f64 = 28.0;
+pub const HANDLE_WIDTH: f64 = 22.0;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

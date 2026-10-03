@@ -23,9 +23,9 @@
       },
       {
         "label": "panel",
-        "title": "Ma Tête — Panneau",
+        "title": "MIND — Panneau",
         "url": "panel.html",
-        "width": 400,
+        "width": 268,
         "height": 720,
         "visible": false,
         "resizable": false,
