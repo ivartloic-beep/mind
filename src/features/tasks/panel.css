@@ -1245,6 +1245,12 @@
   font-size: 0.72rem;
 }
 
+.panel-timer-mode {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .panel-mode-switch {
   flex: 0 0 auto;
   display: grid;

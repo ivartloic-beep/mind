@@ -173,3 +173,144 @@
   outline-offset: 1px;
   border-radius: 4px;
 }
+
+/* —— Rappels actifs (onglet Minuteur) —— */
+.active-reminders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 0;
+  flex: 1 1 auto;
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border);
+  overflow: auto;
+}
+
+.active-reminders-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.active-reminders-empty {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.active-reminders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.active-reminders-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--control-radius);
+  background: var(--surface);
+}
+
+.active-reminders-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.active-reminders-when {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.active-reminders-task {
+  font-size: 0.78rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-reminders-actions,
+.active-reminders-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.active-reminders-edit input[type="time"] {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  padding: 0.2rem 0.3rem;
+  font: inherit;
+  font-size: 0.74rem;
+}
+
+.active-reminders-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  padding: 0.45rem;
+  border: 1px dashed color-mix(in srgb, var(--border) 85%, var(--accent));
+  border-radius: var(--control-radius);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.active-reminders-form-label {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.active-reminders-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.active-reminders-field select,
+.active-reminders-field input[type="time"] {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--fg);
+  padding: 0.28rem 0.35rem;
+  font: inherit;
+  font-size: 0.74rem;
+}
+
+.active-reminders-hint {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.active-reminders-error {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--danger, #b42318);
+}

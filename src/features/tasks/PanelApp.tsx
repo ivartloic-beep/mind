@@ -72,6 +72,7 @@ import type { Task } from "../../types/models";
 import { isTaskOpen } from "../../types/models";
 import { ContactExpress } from "../panel/ContactExpress";
 import { DropZone } from "../panel/DropZone";
+import { ActiveReminders } from "../reminders/ActiveReminders";
 import { ReminderDueBanner } from "../reminders/ReminderDueBanner";
 import { TimerPanel } from "../timer/TimerPanel";
 import "./panel.css";
@@ -1214,6 +1215,7 @@ export function PanelApp() {
                   <p className="panel-muted">Aucune tâche urgente liée.</p>
                 )}
                 <TimerPanel />
+                <ActiveReminders />
               </section>
             )}
 
