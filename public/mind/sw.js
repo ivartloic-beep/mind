@@ -1,13 +1,14 @@
 /* Service worker minimal — cache shell pour ouverture hors réseau. */
-const CACHE = "mind-mobile-v1";
+const CACHE = "mind-mobile-v2";
+const BASE = self.registration.scope; // ex. https://…/app/
 const ASSETS = [
-  "./",
-  "./index.html",
-  "./app.css",
-  "./app.js",
-  "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
+  BASE,
+  BASE + "index.html",
+  BASE + "app.css",
+  BASE + "app.js",
+  BASE + "manifest.json",
+  BASE + "icons/icon-192.png",
+  BASE + "icons/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {

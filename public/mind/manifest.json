@@ -2,8 +2,8 @@
   "name": "MIND",
   "short_name": "MIND",
   "description": "Panneau MIND — file du jour et capture rapide",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/app/",
+  "scope": "/app/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a4d42",
@@ -11,13 +11,13 @@
   "lang": "fr",
   "icons": [
     {
-      "src": "./icons/icon-192.png",
+      "src": "/app/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "./icons/icon-512.png",
+      "src": "/app/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

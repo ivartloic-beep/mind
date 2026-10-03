@@ -46,6 +46,7 @@ Servir ces fichiers en **HTTPS** sous le chemin `/app/` (ou `/app/index.html`)
      B) nginx/Caddy devant qui route `/app/*` → fichiers et le reste → API, ou
      C) petit conteneur `nginx:alpine` sur un port local + règle Tunnel/path.
    - Les assets doivent résoudre en relatif (`./app.js`, `./manifest.json`, icons).
+   - `GET /app` → **301/302 vers `/app/`** (critique : sans slash, `./app.css` devient `/app.css` = 401 API).
    - `GET /app/` et `GET /app/index.html` → 200 HTML PWA.
    - `GET /app/manifest.json`, `/app/sw.js`, `/app/icons/icon-180.png` → 200.
    - L’API continue : `GET /health` → `{"ok":true,...}`, `GET /tasks` avec Bearer inchangé.

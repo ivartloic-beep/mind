@@ -2,6 +2,22 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* /app (sans slash) casse les chemins relatifs → /app.css = 401 API */
+      (function () {
+        var path = location.pathname;
+        if (path === "/app") {
+          location.replace("/app/" + location.search + location.hash);
+          return;
+        }
+        var base = "/app/";
+        if (path.indexOf("/app/") !== 0 && path !== "/app/index.html") {
+          var i = path.lastIndexOf("/");
+          base = i >= 0 ? path.slice(0, i + 1) : "./";
+        }
+        document.write('<base href="' + base + '">');
+      })();
+    </script>
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
@@ -11,11 +27,11 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MIND" />
-    <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
     <title>MIND</title>
-    <link rel="stylesheet" href="./app.css" />
+    <link rel="stylesheet" href="app.css" />
   </head>
   <body>
     <div id="app">
@@ -103,6 +119,6 @@
         </div>
       </section>
     </div>
-    <script src="./app.js" defer></script>
+    <script src="app.js" defer></script>
   </body>
 </html>
