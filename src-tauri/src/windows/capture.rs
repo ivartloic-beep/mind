@@ -4,9 +4,9 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow};
 
 pub const CAPTURE_LABEL: &str = "capture";
-const CAPTURE_WIDTH: f64 = 440.0;
-/// Place pour type + projet (sélection / création rapide).
-const CAPTURE_HEIGHT: f64 = 268.0;
+const CAPTURE_WIDTH: f64 = 480.0;
+/// Tous les champs tâche (titre, desc, projet, priorité, statut, échéance, notes) sans scroll.
+const CAPTURE_HEIGHT: f64 = 540.0;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

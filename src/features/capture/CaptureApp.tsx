@@ -489,11 +489,11 @@ export function CaptureApp() {
       {isNoteKind && (
         <>
           <textarea
-            className="capture-textarea"
+            className="capture-textarea capture-textarea-body"
             value={noteBody}
             disabled={busy || creatingProject}
             placeholder="Contenu"
-            rows={4}
+            rows={5}
             onFocus={() => markInteracting(true)}
             onBlur={() => markInteracting(false)}
             onChange={(e) => setNoteBody(e.target.value)}

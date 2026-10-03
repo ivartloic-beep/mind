@@ -37,10 +37,10 @@
       },
       {
         "label": "capture",
-        "title": "Ma Tête — Capture",
+        "title": "MIND — Capture",
         "url": "capture.html",
-        "width": 460,
-        "height": 560,
+        "width": 480,
+        "height": 540,
         "visible": false,
         "resizable": false,
         "decorations": false,

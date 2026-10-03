@@ -483,9 +483,10 @@ fn ensure_window(app: &AppHandle, front: &Url) -> Result<WebviewWindow, String> 
         GESTION_LABEL,
         WebviewUrl::External(front.clone()),
     )
-    .title("MIND — Gestion")
+    .title("Gestion")
     .inner_size(1280.0, 840.0)
     .min_inner_size(960.0, 640.0)
+    .maximized(true)
     .resizable(true)
     .decorations(true)
     .skip_taskbar(false)
@@ -609,6 +610,7 @@ pub fn show_gestion(app: &AppHandle) -> Result<(), String> {
     let window = ensure_window(app, &front)?;
     inject_session_bridge(&window, &prefs);
     let _ = window.unminimize();
+    let _ = window.maximize();
     window.show().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())?;
 
