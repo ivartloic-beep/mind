@@ -81,7 +81,9 @@ Prefs sync : `{app_data_dir}/sync-prefs.json` (URL + token, hors git).
 
 1. Panneau → **⚙ Paramètres** → Cloud → **Configurer** → coller le Bearer token  
 2. **Tester la connexion** puis **Synchroniser**  
-3. Si « Synchronisation » cochée : sync auto toutes les 5 min  
+3. Si « Synchronisation » cochée : sync auto toutes les **5 s** (mind-api).  
+   Le panneau tire aussi Gestion toutes les **5 s** si connecté.  
+   La PWA mobile (`/app`) poll l’API toutes les **5 s**.
 
 ### Raccourcis Bureau (Windows)
 

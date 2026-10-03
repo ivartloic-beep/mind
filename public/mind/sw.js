@@ -1,5 +1,5 @@
 /* Service worker minimal — cache shell pour ouverture hors réseau. */
-const CACHE = "mind-mobile-v2";
+const CACHE = "mind-mobile-v3";
 const BASE = self.registration.scope; // ex. https://…/app/
 const ASSETS = [
   BASE,

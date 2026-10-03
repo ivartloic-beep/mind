@@ -90,14 +90,71 @@
           <span>Titre</span>
           <input id="capture-title" type="text" enterkeyhint="done" autocomplete="off" placeholder="Quoi ?" />
         </label>
-        <label class="field">
-          <span>Détail (optionnel)</span>
-          <textarea id="capture-notes" placeholder="Notes…"></textarea>
-        </label>
+        <div id="capture-task-fields" class="capture-extra">
+          <label class="field">
+            <span>Description</span>
+            <textarea id="capture-description" placeholder="Description (optionnel)" rows="2"></textarea>
+          </label>
+          <label class="field">
+            <span>Projet</span>
+            <select id="capture-project"></select>
+          </label>
+          <div class="capture-grid">
+            <label class="field">
+              <span>Priorité</span>
+              <select id="capture-priority">
+                <option value="0">Basse</option>
+                <option value="1" selected>Moyenne</option>
+                <option value="2">Haute</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Statut</span>
+              <select id="capture-status">
+                <option value="todo" selected>À faire</option>
+                <option value="in_progress">En cours</option>
+                <option value="done">Terminée</option>
+              </select>
+            </label>
+          </div>
+          <label class="field">
+            <span>Échéance</span>
+            <input id="capture-due" type="date" />
+          </label>
+          <label class="field">
+            <span>Notes</span>
+            <textarea id="capture-notes" placeholder="Notes…" rows="2"></textarea>
+          </label>
+        </div>
+        <div id="capture-note-fields" class="capture-extra" hidden>
+          <label class="field">
+            <span>Contenu</span>
+            <textarea id="capture-body" placeholder="Contenu…" rows="4"></textarea>
+          </label>
+          <label class="field">
+            <span>Projet</span>
+            <select id="capture-note-project"></select>
+          </label>
+          <p class="muted" id="capture-note-hint">Sans projet → bureau Gestion (après sync PC).</p>
+        </div>
         <div class="actions">
-          <button type="button" class="btn btn-primary" id="capture-submit">Capturer</button>
+          <button type="button" class="btn btn-primary" id="capture-submit">Créer</button>
         </div>
       </section>
+
+      <div id="task-sheet" class="task-sheet" hidden>
+        <div class="task-sheet-card" role="dialog" aria-modal="true" aria-labelledby="task-sheet-title">
+          <p class="section-label">Tâche</p>
+          <h2 id="task-sheet-title" class="task-sheet-title"></h2>
+          <p id="task-sheet-meta" class="item-meta"></p>
+          <p id="task-sheet-notes" class="task-sheet-notes muted"></p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="task-sheet-done">Terminer</button>
+            <button type="button" class="btn" id="task-sheet-gestion">Ouvrir Gestion</button>
+            <button type="button" class="btn btn-ghost" id="task-sheet-close">Fermer</button>
+          </div>
+        </div>
+      </div>
 
       <section class="panel" data-panel="timer">
         <p class="section-label">Rappels</p>

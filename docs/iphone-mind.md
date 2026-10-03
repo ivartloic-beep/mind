@@ -46,9 +46,9 @@ Puis ouvrir l’URL sur l’iPhone (même Wi‑Fi / tunnel).
 2. Coller le **même Bearer** que dans MIND PC (Réglages → sync)  
 3. Enregistrer  
 
-Modes : **Jour** (file) · **Capturer** · **Rappels** (HH:MM).
+Modes : **Jour** (file, ○ terminer, tap → fiche) · **Capturer** (mêmes champs que PC) · **Rappels**.
 
-Deep links : `?mode=capture` · `?mode=day` · `?mode=timer`.
+Poll API toutes les **5 s**. Sur PC : sync mind-api + Gestion aussi en **5 s** (cloud ON / session Gestion).
 
 ---
 

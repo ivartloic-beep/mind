@@ -294,7 +294,7 @@ export function PanelApp() {
       if (gestionLoggedInRef.current) {
         void pullGestion();
       }
-    }, 20_000);
+    }, 5_000);
     unlistens.push(() => window.clearInterval(poll));
 
     return () => {

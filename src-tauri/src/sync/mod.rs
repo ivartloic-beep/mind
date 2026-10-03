@@ -62,10 +62,10 @@ pub async fn sync_now(app: AppHandle) -> Result<SyncReport, String> {
     }
 }
 
-/// Sync périodique si activée (toutes les 5 min).
+/// Sync périodique si activée (toutes les 5 s — aligné mobile / Gestion).
 pub fn start_sync_scheduler(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(5 * 60));
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
         interval.tick().await; // skip immédiat
         loop {
             interval.tick().await;

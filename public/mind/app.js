@@ -1,14 +1,17 @@
 /**
- * MIND mobile — panneau + capture via mind-api.
- * Auth : Bearer stocké localement (même token que le sync desktop).
+ * MIND mobile — panneau + capture (champs alignés PC) via mind-api.
+ * Auth : Bearer localStorage. Sync poll 5 s.
  */
 
 const STORAGE_KEY = "mind.mobile.prefs";
 const DEFAULT_BASE = "https://mind.louetline.fr";
+const GESTION_URL = "https://gestion.louetline.fr/";
+const POLL_MS = 5_000;
 
 /** @typedef {{ baseUrl: string, token: string }} Prefs */
-/** @typedef {{ id: string, title: string, status?: string, priority?: number, dueAt?: string|null, notes?: string, completedAt?: string|null, updatedAt?: string, deletedAt?: string|null }} CloudTask */
+/** @typedef {{ id: string, title: string, status?: string, priority?: number, dueAt?: string|null, notes?: string, projectId?: string|null, completedAt?: string|null, updatedAt?: string, deletedAt?: string|null }} CloudTask */
 /** @typedef {{ id: string, title: string, remindAt: string, taskId?: string|null, body?: string, done?: boolean, deletedAt?: string|null }} CloudReminder */
+/** @typedef {{ id: string, name: string, archived?: boolean, deletedAt?: string|null }} CloudProject */
 
 const state = {
   /** @type {Prefs} */
@@ -18,11 +21,16 @@ const state = {
   tasks: [],
   /** @type {CloudReminder[]} */
   reminders: [],
+  /** @type {CloudProject[]} */
+  projects: [],
   captureKind: "task",
+  /** @type {string|null} */
+  selectedTaskId: null,
   busy: false,
   message: "",
   error: "",
   editReminderId: null,
+  bound: false,
 };
 
 function loadPrefs() {
@@ -125,6 +133,25 @@ function formatWhen(iso) {
   });
 }
 
+function formatStatus(s) {
+  switch ((s || "todo").toLowerCase()) {
+    case "in_progress":
+      return "En cours";
+    case "done":
+    case "completed":
+      return "Terminée";
+    default:
+      return "À faire";
+  }
+}
+
+function formatPriority(n) {
+  const p = Number(n ?? 1);
+  if (p >= 2) return "Haute";
+  if (p <= 0) return "Basse";
+  return "Moyenne";
+}
+
 function localTimeFromIso(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "09:00";
@@ -151,6 +178,28 @@ function defaultLocalTime() {
   return localTimeFromIso(d.toISOString());
 }
 
+function packTaskNotes(notes, description) {
+  const base = String(notes || "").trim();
+  const desc = String(description || "").trim();
+  if (!desc) return base;
+  const meta = JSON.stringify({ description: desc });
+  return `${base}${base ? "\n\n" : ""}<!--mind-meta:${meta}-->`;
+}
+
+function unpackTaskNotes(raw) {
+  const text = String(raw || "");
+  const m = text.match(/\n\n<!--mind-meta:([\s\S]*?)-->\s*$/);
+  if (!m) return { notes: text, description: "" };
+  let description = "";
+  try {
+    const meta = JSON.parse(m[1]);
+    description = String(meta.description || "");
+  } catch {
+    /* ignore */
+  }
+  return { notes: text.slice(0, m.index).trimEnd(), description };
+}
+
 async function api(path, options = {}) {
   const base = state.prefs.baseUrl.replace(/\/$/, "") || DEFAULT_BASE;
   const headers = new Headers(options.headers || {});
@@ -170,29 +219,82 @@ async function api(path, options = {}) {
   return null;
 }
 
-async function refresh() {
+async function refresh({ silent = false } = {}) {
   if (!state.prefs.token) {
     state.tasks = [];
     state.reminders = [];
-    state.error = "Colle ton token API (⚙) — le même que dans MIND PC.";
-    render();
+    state.projects = [];
+    if (!silent) {
+      state.error = "Colle ton token API (⚙) — le même que dans MIND PC.";
+      render();
+    }
     return;
   }
-  state.error = "";
-  const [tasksRes, remindersRes] = await Promise.all([
-    api("/tasks?limit=1000"),
-    api("/reminders?limit=1000"),
-  ]);
-  state.tasks = Array.isArray(tasksRes?.items) ? tasksRes.items : [];
-  state.reminders = Array.isArray(remindersRes?.items) ? remindersRes.items : [];
-  render();
+  try {
+    const [tasksRes, remindersRes, projectsRes] = await Promise.all([
+      api("/tasks?limit=1000"),
+      api("/reminders?limit=1000"),
+      api("/projects?limit=1000"),
+    ]);
+    state.tasks = Array.isArray(tasksRes?.items) ? tasksRes.items : [];
+    state.reminders = Array.isArray(remindersRes?.items) ? remindersRes.items : [];
+    state.projects = Array.isArray(projectsRes?.items)
+      ? projectsRes.items.filter((p) => !p.deletedAt && !p.archived)
+      : [];
+    if (!silent) state.error = "";
+    render();
+  } catch (err) {
+    if (!silent) {
+      state.error = err instanceof Error ? err.message : "Chargement impossible";
+      render();
+    }
+  }
+}
+
+function fillProjectSelects() {
+  const opts =
+    `<option value="">Sans projet</option>` +
+    state.projects
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+      .map((p) => `<option value="${p.id}"></option>`)
+      .join("");
+  for (const id of ["#capture-project", "#capture-note-project"]) {
+    const sel = /** @type {HTMLSelectElement} */ ($(id));
+    const prev = sel.value;
+    sel.innerHTML = opts;
+    [...sel.options].forEach((opt, i) => {
+      if (i === 0) return;
+      const p = state.projects.slice().sort((a, b) => a.name.localeCompare(b.name, "fr"))[i - 1];
+      if (p) opt.textContent = p.name;
+    });
+    if (prev && state.projects.some((p) => p.id === prev)) sel.value = prev;
+  }
+}
+
+function resetCaptureForm() {
+  /** @type {HTMLInputElement} */ ($("#capture-title")).value = "";
+  /** @type {HTMLTextAreaElement} */ ($("#capture-description")).value = "";
+  /** @type {HTMLTextAreaElement} */ ($("#capture-notes")).value = "";
+  /** @type {HTMLTextAreaElement} */ ($("#capture-body")).value = "";
+  /** @type {HTMLSelectElement} */ ($("#capture-project")).value = "";
+  /** @type {HTMLSelectElement} */ ($("#capture-note-project")).value = "";
+  /** @type {HTMLSelectElement} */ ($("#capture-priority")).value = "1";
+  /** @type {HTMLSelectElement} */ ($("#capture-status")).value = "todo";
+  /** @type {HTMLInputElement} */ ($("#capture-due")).value = "";
 }
 
 async function createCapture() {
   const title = /** @type {HTMLInputElement} */ ($("#capture-title")).value.trim();
-  const notes = /** @type {HTMLTextAreaElement} */ ($("#capture-notes")).value.trim();
-  if (!title) {
+  const isTask = state.captureKind === "task";
+  const body = /** @type {HTMLTextAreaElement} */ ($("#capture-body")).value.trim();
+  if (isTask && !title) {
     state.error = "Titre requis.";
+    render();
+    return;
+  }
+  if (!isTask && !title && !body) {
+    state.error = "Titre ou contenu requis.";
     render();
     return;
   }
@@ -203,40 +305,50 @@ async function createCapture() {
   try {
     const id = uid();
     const ts = nowIso();
-    if (state.captureKind === "task") {
+    if (isTask) {
+      const description = /** @type {HTMLTextAreaElement} */ ($("#capture-description")).value.trim();
+      const notes = /** @type {HTMLTextAreaElement} */ ($("#capture-notes")).value.trim();
+      const projectId = /** @type {HTMLSelectElement} */ ($("#capture-project")).value || null;
+      const priority = Number(/** @type {HTMLSelectElement} */ ($("#capture-priority")).value);
+      const status = /** @type {HTMLSelectElement} */ ($("#capture-status")).value || "todo";
+      const due = /** @type {HTMLInputElement} */ ($("#capture-due")).value.trim();
+      const dueAt = due ? `${due}T12:00:00.000Z` : null;
       await api(`/tasks/${id}`, {
         method: "PUT",
         body: JSON.stringify({
           id,
           title,
-          notes,
-          status: "todo",
-          priority: 1,
+          projectId,
+          notes: packTaskNotes(notes, description),
+          status,
+          priority: Number.isFinite(priority) ? priority : 1,
+          dueAt,
+          completedAt: status === "done" ? ts : null,
           createdAt: ts,
           updatedAt: ts,
         }),
       });
+      state.message = "Tâche capturée.";
     } else {
       const kind = state.captureKind === "idea" ? "idea" : "note";
-      const body = notes
-        ? `${notes}\n\n<!--mind-meta:{"kind":"${kind}"}-->`
-        : `<!--mind-meta:{"kind":"${kind}"}-->`;
+      const projectId = /** @type {HTMLSelectElement} */ ($("#capture-note-project")).value || null;
+      const content = body || title;
+      const noteBody = `${content}\n\n<!--mind-meta:{"kind":"${kind}"}-->`;
       await api(`/notes/${id}`, {
         method: "PUT",
         body: JSON.stringify({
           id,
-          title,
-          body,
+          title: title || (kind === "idea" ? "Idée" : "Note"),
+          body: noteBody,
+          projectId,
           pinned: false,
           createdAt: ts,
           updatedAt: ts,
         }),
       });
+      state.message = kind === "idea" ? "Idée capturée." : "Note capturée.";
     }
-    /** @type {HTMLInputElement} */ ($("#capture-title")).value = "";
-    /** @type {HTMLTextAreaElement} */ ($("#capture-notes")).value = "";
-    state.message =
-      state.captureKind === "task" ? "Tâche capturée." : state.captureKind === "idea" ? "Idée capturée." : "Note capturée.";
+    resetCaptureForm();
     await refresh();
   } catch (err) {
     state.error = err instanceof Error ? err.message : "Capture impossible";
@@ -247,21 +359,45 @@ async function createCapture() {
   }
 }
 
-async function completeTask(task) {
+function taskPayload(task, patch = {}) {
+  return {
+    id: task.id,
+    title: task.title,
+    projectId: task.projectId ?? null,
+    notes: task.notes || "",
+    status: task.status || "todo",
+    priority: Number(task.priority ?? 1),
+    dueAt: task.dueAt ?? null,
+    completedAt: task.completedAt ?? null,
+    sortOrder: task.sortOrder ?? 0,
+    createdAt: task.createdAt || nowIso(),
+    updatedAt: nowIso(),
+    deletedAt: null,
+    ...patch,
+  };
+}
+
+async function completeTask(taskId) {
+  const task = state.tasks.find((t) => t.id === taskId);
+  if (!task || state.busy) return;
   state.busy = true;
   state.error = "";
+  state.message = "";
   render();
   try {
     const ts = nowIso();
     await api(`/tasks/${task.id}`, {
       method: "PUT",
-      body: JSON.stringify({
-        ...task,
-        status: "done",
-        completedAt: ts,
-        updatedAt: ts,
-      }),
+      body: JSON.stringify(
+        taskPayload(task, {
+          status: "done",
+          completedAt: ts,
+          updatedAt: ts,
+        }),
+      ),
     });
+    state.selectedTaskId = null;
+    state.message = "Tâche terminée.";
     await refresh();
   } catch (err) {
     state.error = err instanceof Error ? err.message : "Mise à jour impossible";
@@ -269,6 +405,16 @@ async function completeTask(task) {
     state.busy = false;
     render();
   }
+}
+
+function openTaskSheet(taskId) {
+  state.selectedTaskId = taskId;
+  render();
+}
+
+function closeTaskSheet() {
+  state.selectedTaskId = null;
+  render();
 }
 
 async function scheduleReminder() {
@@ -358,7 +504,7 @@ function isStandalone() {
 function render() {
   const configured = Boolean(state.prefs.token);
   $("#status-line").textContent = configured
-    ? `Connecté · ${state.prefs.baseUrl.replace(/^https?:\/\//, "")}`
+    ? `Connecté · sync 5 s · ${state.prefs.baseUrl.replace(/^https?:\/\//, "")}`
     : "Token manquant";
 
   document.querySelectorAll(".mode-btn").forEach((btn) => {
@@ -368,32 +514,40 @@ function render() {
     panel.classList.toggle("is-active", panel.getAttribute("data-panel") === state.mode);
   });
 
+  const taskFields = $("#capture-task-fields");
+  const noteFields = $("#capture-note-fields");
+  const isTask = state.captureKind === "task";
+  taskFields.hidden = !isTask;
+  noteFields.hidden = isTask;
+
   const hint = $("#install-hint");
   if (isIos() && !isStandalone()) {
     hint.hidden = false;
     hint.textContent =
-      "Sur iPhone : Partager → Sur l’écran d’accueil → ajouter MIND. Puis crée le raccourci Capture (voir docs).";
+      "Sur iPhone : Partager → Sur l’écran d’accueil → ajouter MIND.";
   } else {
     hint.hidden = true;
   }
 
+  fillProjectSelects();
+
   const dayList = $("#day-list");
   const queue = pickDayQueue(state.tasks);
   if (!configured) {
-    dayList.innerHTML = `<li class="muted">Configure le token pour voir ta file du jour.</li>`;
+    dayList.innerHTML = `<li class="muted">Configure le token (⚙) pour voir ta file du jour.</li>`;
   } else if (queue.length === 0) {
     dayList.innerHTML = `<li class="muted">Aucune tâche ouverte.</li>`;
   } else {
     dayList.innerHTML = queue
       .map((t) => {
         const due = formatDue(t.dueAt);
-        const meta = [due && `échéance ${due}`, t.status && t.status !== "todo" ? t.status : ""]
+        const meta = [formatStatus(t.status), formatPriority(t.priority), due && `échéance ${due}`]
           .filter(Boolean)
           .join(" · ");
         return `<li class="item" data-id="${t.id}">
-          <button type="button" class="check" data-action="done" aria-label="Terminer"></button>
+          <button type="button" class="check" data-action="done" aria-label="Terminer">○</button>
           <div class="item-main">
-            <p class="item-title"></p>
+            <button type="button" class="item-title-btn" data-action="open"></button>
             ${meta ? `<p class="item-meta"></p>` : ""}
           </div>
         </li>`;
@@ -401,15 +555,14 @@ function render() {
       .join("");
     [...dayList.children].forEach((li, i) => {
       const t = queue[i];
-      li.querySelector(".item-title").textContent = t.title;
+      li.querySelector(".item-title-btn").textContent = t.title;
       const metaEl = li.querySelector(".item-meta");
       if (metaEl) {
         const due = formatDue(t.dueAt);
-        metaEl.textContent = [due && `échéance ${due}`, t.status && t.status !== "todo" ? t.status : ""]
+        metaEl.textContent = [formatStatus(t.status), formatPriority(t.priority), due && `échéance ${due}`]
           .filter(Boolean)
           .join(" · ");
       }
-      li.querySelector('[data-action="done"]').addEventListener("click", () => void completeTask(t));
     });
   }
 
@@ -434,17 +587,15 @@ function render() {
     remList.innerHTML = `<li class="muted">Aucun rappel planifié.</li>`;
   } else {
     remList.innerHTML = upcoming
-      .map((r) => {
-        const task = r.taskId ? state.tasks.find((t) => t.id === r.taskId) : null;
-        const editing = state.editReminderId === r.id;
-        return `<li class="item" data-rid="${r.id}">
+      .map(
+        () => `<li class="item">
           <div class="item-main">
             <p class="item-meta when"></p>
             <p class="item-title title"></p>
             <div class="row-actions"></div>
           </div>
-        </li>`;
-      })
+        </li>`,
+      )
       .join("");
     [...remList.children].forEach((li, i) => {
       const r = upcoming[i];
@@ -488,6 +639,31 @@ function render() {
   });
   if (prev && openTasks.some((t) => t.id === prev)) sel.value = prev;
 
+  const sheet = $("#task-sheet");
+  const selected = state.selectedTaskId
+    ? state.tasks.find((t) => t.id === state.selectedTaskId)
+    : null;
+  if (selected) {
+    sheet.hidden = false;
+    $("#task-sheet-title").textContent = selected.title;
+    const due = formatDue(selected.dueAt);
+    $("#task-sheet-meta").textContent = [
+      formatStatus(selected.status),
+      formatPriority(selected.priority),
+      due && `échéance ${due}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const unpacked = unpackTaskNotes(selected.notes || "");
+    const noteText = [unpacked.description && `Description : ${unpacked.description}`, unpacked.notes]
+      .filter(Boolean)
+      .join("\n\n");
+    $("#task-sheet-notes").textContent = noteText || "Pas de détail.";
+    $("#task-sheet-done").disabled = state.busy || !isOpenTask(selected);
+  } else {
+    sheet.hidden = true;
+  }
+
   const msg = $("#flash");
   msg.className = state.error ? "error" : state.message ? "ok" : "muted";
   msg.textContent = state.error || state.message || "";
@@ -498,11 +674,15 @@ function render() {
 }
 
 function bind() {
+  if (state.bound) return;
+  state.bound = true;
+
   document.querySelectorAll(".mode-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.mode = btn.getAttribute("data-mode") || "day";
       state.message = "";
       state.error = "";
+      state.selectedTaskId = null;
       render();
     });
   });
@@ -528,6 +708,36 @@ function bind() {
     void refresh();
   });
 
+  $("#day-list").addEventListener("click", (ev) => {
+    const target = /** @type {HTMLElement} */ (ev.target);
+    const btn = target.closest("[data-action]");
+    const row = target.closest("li[data-id]");
+    if (!row) return;
+    const id = row.getAttribute("data-id");
+    if (!id) return;
+    const action = btn?.getAttribute("data-action");
+    if (action === "done") {
+      ev.preventDefault();
+      void completeTask(id);
+      return;
+    }
+    if (action === "open" || !btn) {
+      ev.preventDefault();
+      openTaskSheet(id);
+    }
+  });
+
+  $("#task-sheet-close").addEventListener("click", () => closeTaskSheet());
+  $("#task-sheet").addEventListener("click", (ev) => {
+    if (ev.target === $("#task-sheet")) closeTaskSheet();
+  });
+  $("#task-sheet-done").addEventListener("click", () => {
+    if (state.selectedTaskId) void completeTask(state.selectedTaskId);
+  });
+  $("#task-sheet-gestion").addEventListener("click", () => {
+    window.open(GESTION_URL, "_blank", "noopener,noreferrer");
+  });
+
   $("#capture-submit").addEventListener("click", () => void createCapture());
   $("#reminder-submit").addEventListener("click", () => void scheduleReminder());
   $("#refresh-btn").addEventListener("click", () => void refresh());
@@ -536,7 +746,6 @@ function bind() {
   /** @type {HTMLInputElement} */ ($("#pref-token")).value = state.prefs.token;
   /** @type {HTMLInputElement} */ ($("#reminder-time")).value = defaultLocalTime();
 
-  // Deep link ?mode=capture|day|timer
   const params = new URLSearchParams(location.search);
   const mode = params.get("mode");
   if (mode === "capture" || mode === "day" || mode === "timer") state.mode = mode;
@@ -552,12 +761,11 @@ async function main() {
       /* ignore */
     }
   }
-  try {
-    await refresh();
-  } catch (err) {
-    state.error = err instanceof Error ? err.message : "Chargement impossible";
-    render();
-  }
+  await refresh();
+  window.setInterval(() => {
+    if (state.busy || !state.prefs.token) return;
+    void refresh({ silent: true });
+  }, POLL_MS);
 }
 
 void main();
