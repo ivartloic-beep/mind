@@ -83,12 +83,14 @@ pub fn start_sync_scheduler(app: AppHandle) {
     });
 }
 
-/// Soft-delete distant après une suppression locale (si sync ON).
+/// Soft-delete distant après une suppression locale.
+/// Si un token cloud est configuré, on propage même si la sync périodique est OFF
+/// (sinon le mobile garde des tâches déjà effacées sur le PC).
 pub fn schedule_remote_delete(app: &AppHandle, entity: &'static str, id: String) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let cfg = config::load(&app);
-        if !cfg.enabled || cfg.token.trim().is_empty() {
+        if cfg.token.trim().is_empty() {
             return;
         }
         let Ok(client) = client::MindClient::from_config(&cfg) else {

@@ -59,9 +59,8 @@ pub async fn delete_project(
     id: String,
 ) -> Result<(), String> {
     gestion::delete_project_hybrid(&app, &state, &id).await?;
-    if !gestion::tasks_backend_active(&app) {
-        sync::schedule_remote_delete(&app, "projects", id.clone());
-    }
+    // Toujours propager vers mind-api (mobile), même si Gestion est le backend tâches.
+    sync::schedule_remote_delete(&app, "projects", id.clone());
     emit_changed(&app, "project", &id)?;
     Ok(())
 }
@@ -104,9 +103,8 @@ pub async fn delete_task(
     id: String,
 ) -> Result<(), String> {
     gestion::delete_task_hybrid(&app, &state, &id).await?;
-    if !gestion::tasks_backend_active(&app) {
-        sync::schedule_remote_delete(&app, "tasks", id.clone());
-    }
+    // Toujours propager vers mind-api (mobile), même si Gestion est le backend tâches.
+    sync::schedule_remote_delete(&app, "tasks", id.clone());
     emit_changed(&app, "task", &id)?;
     Ok(())
 }
@@ -170,9 +168,8 @@ pub async fn delete_note(
     id: String,
 ) -> Result<(), String> {
     gestion::delete_note_hybrid(&app, &state, &id).await?;
-    if !gestion::tasks_backend_active(&app) {
-        sync::schedule_remote_delete(&app, "notes", id.clone());
-    }
+    // Toujours propager vers mind-api (mobile), même si Gestion est actif.
+    sync::schedule_remote_delete(&app, "notes", id.clone());
     emit_changed(&app, "note", &id)?;
     Ok(())
 }
