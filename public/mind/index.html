@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0a4d42" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MIND" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <title>MIND</title>
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="brand">
+        <div>
+          <h1>MIND</h1>
+          <p class="brand-sub" id="status-line">…</p>
+        </div>
+        <div class="actions">
+          <button type="button" class="icon-btn" id="refresh-btn" title="Actualiser" aria-label="Actualiser">↻</button>
+          <button type="button" class="icon-btn" id="settings-toggle" title="Réglages" aria-label="Réglages">⚙</button>
+        </div>
+      </header>
+
+      <p id="install-hint" class="install-hint" hidden></p>
+
+      <section id="settings" class="settings" aria-label="Réglages">
+        <p class="section-label">Connexion API</p>
+        <label class="field">
+          <span>URL</span>
+          <input id="pref-base" type="url" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Bearer token</span>
+          <input id="pref-token" type="password" autocomplete="off" spellcheck="false" placeholder="même token que MIND PC" />
+        </label>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="settings-save">Enregistrer</button>
+        </div>
+        <p class="muted">
+          Le token reste sur cet iPhone (localStorage). Pour la capture écran verrouillé, utilise aussi le raccourci iOS (docs).
+        </p>
+      </section>
+
+      <nav class="modes" aria-label="Mode">
+        <button type="button" class="mode-btn is-active" data-mode="day">Jour</button>
+        <button type="button" class="mode-btn" data-mode="capture">Capturer</button>
+        <button type="button" class="mode-btn" data-mode="timer">Rappels</button>
+      </nav>
+
+      <p id="flash" class="muted" aria-live="polite"></p>
+
+      <section class="panel is-active" data-panel="day">
+        <p class="section-label">File du jour</p>
+        <ul id="day-list" class="list"></ul>
+      </section>
+
+      <section class="panel" data-panel="capture">
+        <p class="section-label">Capture rapide</p>
+        <div class="kind-row" role="group" aria-label="Type">
+          <button type="button" class="kind-btn is-active" data-kind="task">Tâche</button>
+          <button type="button" class="kind-btn" data-kind="note">Note</button>
+          <button type="button" class="kind-btn" data-kind="idea">Idée</button>
+        </div>
+        <label class="field">
+          <span>Titre</span>
+          <input id="capture-title" type="text" enterkeyhint="done" autocomplete="off" placeholder="Quoi ?" />
+        </label>
+        <label class="field">
+          <span>Détail (optionnel)</span>
+          <textarea id="capture-notes" placeholder="Notes…"></textarea>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="capture-submit">Capturer</button>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="timer">
+        <p class="section-label">Rappels</p>
+        <ul id="reminder-list" class="list"></ul>
+        <div class="reminder-form">
+          <p class="section-label">Nouveau rappel</p>
+          <label class="field">
+            <span>Tâche</span>
+            <select id="reminder-task"></select>
+          </label>
+          <label class="field">
+            <span>Heure</span>
+            <input id="reminder-time" type="time" />
+          </label>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="reminder-submit">Planifier</button>
+          </div>
+          <p class="muted">Si l’heure est déjà passée, le rappel est mis à demain.</p>
+        </div>
+      </section>
+    </div>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

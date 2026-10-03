@@ -21,6 +21,7 @@ Nom provisoire : **Ma Tête**.
 - **Étape 12** : tray + menu, autostart ON, single-instance, boot sans flash
 - **UX** : capture fermable (✕/Échap) · post-its autonomes (CTRL+ALT+P, croix=supprimer, CTRL+ALT+H masquer/réafficher) · panneau compact + Bibliothèque (réouvrable) · minuteur durée libre (+5 min)
 - **Cloud** : sync optionnelle vers `https://mind.louetline.fr` (Réglages → token + Synchroniser)
+- **iPhone** : PWA panneau `public/mind/` (Jour / Capturer / Rappels) + raccourci iOS Capture — voir `docs/iphone-mind.md`
 - **Phase 1 Gestion** : shell Windows embarque le front `gestion-v2` (`public/gestion/`), sans messagerie/mails, Événementiel → Production.
 - **Phase 2 Tâches** : modèle Task = `personal_tasks` (gestion). Avec session Gestion (Paramètres → login), capture/panneau/bibliothèque CRUD via l’API PHP ; sinon SQLite local élargi. Import one-shot des tâches locales. Voir `docs/ROADMAP-GESTION-WINDOWS.md`.
 - **Sync panneau ↔ Gestion (2 sens)** : tâches ↔ `personal_tasks` ; projets ↔ Production + `work_projects` ; notes/idées ↔ bureau (`workspace.php`). Pull au focus / fermeture Gestion / toutes les 20s + bouton « Synchroniser maintenant ».
