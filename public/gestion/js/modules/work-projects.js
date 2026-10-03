@@ -366,17 +366,44 @@ function openWorkProjectModal(projectId) {
     document.getElementById('wpFormColor').value = wpEditingProject ? (wpEditingProject.color || '#4a90d9') : '#4a90d9';
     document.getElementById('wpFormIcon').value = wpEditingProject ? (wpEditingProject.icon || '📁') : '📁';
     var tplSel = document.getElementById('wpFormTemplate');
+    var tplGroup = document.getElementById('wpFormTemplateGroup');
     if (tplSel) {
         var templates = (workProjectsData.templates || []).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-        tplSel.innerHTML = '<option value="">— Vide —</option>' + templates.map(function(t) {
+        tplSel.innerHTML = '<option value="">— Vide (aucune checklist) —</option>' + templates.map(function(t) {
+            var n = (t.defaultTasks || []).length;
             var sel = wpEditingProject && wpEditingProject.templateId === t.id ? ' selected' : '';
-            return '<option value="' + t.id + '"' + sel + '>' + escHtml((t.icon || '') + ' ' + t.name) + '</option>';
+            return '<option value="' + t.id + '"' + sel + '>' +
+                escHtml((t.icon || '📁') + ' ' + t.name) +
+                (n ? ' — ' + n + ' tâche' + (n > 1 ? 's' : '') : '') +
+                '</option>';
         }).join('');
         tplSel.disabled = !!wpEditingProject;
     }
+    if (tplGroup) tplGroup.style.display = wpEditingProject ? 'none' : '';
+    if (typeof updateWpFormTemplateHint === 'function') updateWpFormTemplateHint();
     renderWpFormImagePreview();
     document.getElementById('wpProjectModal').classList.add('active');
 }
+
+function updateWpFormTemplateHint() {
+    var hint = document.getElementById('wpFormTemplateHint');
+    var sel = document.getElementById('wpFormTemplate');
+    if (!hint || !sel) return;
+    var tplId = sel.value;
+    if (!tplId) {
+        hint.textContent = 'Sans modèle : espace vide. Les modèles Admin ajoutent une checklist de démarrage.';
+        return;
+    }
+    var tpl = (workProjectsData.templates || []).find(function(t) { return t.id === tplId; });
+    if (!tpl) {
+        hint.textContent = 'Modèle sélectionné.';
+        return;
+    }
+    var n = (tpl.defaultTasks || []).length;
+    hint.textContent = (tpl.description || tpl.name || 'Modèle') +
+        (n ? ' · ' + n + ' tâche' + (n > 1 ? 's' : '') + ' seront créées.' : ' · aucune tâche type.');
+}
+if (typeof window !== 'undefined') window.updateWpFormTemplateHint = updateWpFormTemplateHint;
 
 function closeWorkProjectModal() {
     document.getElementById('wpProjectModal').classList.remove('active');

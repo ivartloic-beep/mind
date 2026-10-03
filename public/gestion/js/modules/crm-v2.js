@@ -1899,6 +1899,7 @@ function ensureDealShape(deal) {
     }
     syncCrmDealProspectFields(deal);
     if (deal.workProjectId === undefined) deal.workProjectId = null;
+    if (deal.productionProjectId === undefined) deal.productionProjectId = null;
 }
 
 function syncDealNotesLegacyField(deal) {
@@ -3403,11 +3404,12 @@ function renderCrmDealFiche() {
     var wp = getWorkProjectForCrmDeal(deal.id);
     var wpBtn = document.getElementById('crmDealFicheWpBtn');
     var createWpBtn = document.getElementById('crmDealFicheCreateWpBtn');
+    var wonLike = deal.status === 'won' || (deal.stage && /gagn|won|sign/i.test(deal.stage));
     if (wpBtn) wpBtn.style.display = wp ? '' : 'none';
     if (createWpBtn) {
-        var canCreateWp = !wp && (deal.status === 'won' || (deal.stage && /gagn|won|sign/i.test(deal.stage)));
-        createWpBtn.style.display = canCreateWp && typeof createWorkProjectFromCrmDeal === 'function' ? '' : 'none';
+        createWpBtn.style.display = (!wp && wonLike && typeof createWorkProjectFromCrmDeal === 'function') ? '' : 'none';
     }
+    updateCrmDealProductionButtons(deal, wonLike);
 
     renderCrmDealFollowUpPending(deal);
     renderCrmDealFollowUpHistory(deal);
@@ -3579,11 +3581,12 @@ function saveCrmDealFicheInfo() {
     var wp = getWorkProjectForCrmDeal(deal.id);
     var wpBtn = document.getElementById('crmDealFicheWpBtn');
     var createWpBtn = document.getElementById('crmDealFicheCreateWpBtn');
+    var wonLike = deal.status === 'won' || (deal.stage && /gagn|won|sign/i.test(deal.stage));
     if (wpBtn) wpBtn.style.display = wp ? '' : 'none';
     if (createWpBtn) {
-        var canCreateWp = !wp && (deal.status === 'won' || (deal.stage && /gagn|won|sign/i.test(deal.stage)));
-        createWpBtn.style.display = canCreateWp && typeof createWorkProjectFromCrmDeal === 'function' ? '' : 'none';
+        createWpBtn.style.display = (!wp && wonLike && typeof createWorkProjectFromCrmDeal === 'function') ? '' : 'none';
     }
+    updateCrmDealProductionButtons(deal, wonLike);
     if (typeof showToast === 'function') showToast('Dossier enregistré', 'success');
     if (typeof renderCrmDealsBrowse === 'function') renderCrmDealsBrowse();
     if (typeof wpCurrentId !== 'undefined' && document.getElementById('workProjectPage') && document.getElementById('workProjectPage').classList.contains('active')) {
@@ -3608,6 +3611,110 @@ function createCrmDealWorkProject() {
     if (!crmV2DealId || typeof createWorkProjectFromCrmDeal !== 'function') return;
     createWorkProjectFromCrmDeal(crmV2DealId);
 }
+
+function getProductionProjectForCrmDeal(dealId) {
+    if (!dealId) return null;
+    var deal = typeof getCrmDealById === 'function' ? getCrmDealById(dealId) : null;
+    if (deal && deal.productionProjectId && typeof projects !== 'undefined') {
+        var byId = (projects || []).find(function(p) { return String(p.id) === String(deal.productionProjectId); });
+        if (byId) return byId;
+    }
+    if (typeof projects === 'undefined') return null;
+    return (projects || []).find(function(p) {
+        return String(p.crmDealId || '') === String(dealId);
+    }) || null;
+}
+window.getProductionProjectForCrmDeal = getProductionProjectForCrmDeal;
+
+function updateCrmDealProductionButtons(deal, wonLike) {
+    var prod = getProductionProjectForCrmDeal(deal && deal.id);
+    var prodBtn = document.getElementById('crmDealFicheProdBtn');
+    var createProdBtn = document.getElementById('crmDealFicheCreateProdBtn');
+    if (prodBtn) prodBtn.style.display = prod ? '' : 'none';
+    if (createProdBtn) {
+        createProdBtn.style.display = (!prod && wonLike) ? '' : 'none';
+    }
+}
+
+function openCrmDealProduction() {
+    var prod = getProductionProjectForCrmDeal(crmV2DealId);
+    if (!prod) return;
+    if (typeof closeAllPages === 'function') closeAllPages();
+    if (prod.type === 'tournee' && typeof viewTournee === 'function') viewTournee(prod.id);
+    else if (typeof viewSpectacle === 'function') viewSpectacle(prod.id);
+}
+window.openCrmDealProduction = openCrmDealProduction;
+
+async function createProductionSpectacleFromCrmDeal(dealId) {
+    var deal = typeof getCrmDealById === 'function' ? getCrmDealById(dealId) : null;
+    if (!deal) {
+        if (typeof showToast === 'function') showToast('Dossier CRM introuvable', 'error');
+        return null;
+    }
+    ensureDealShape(deal);
+    var existing = getProductionProjectForCrmDeal(deal.id);
+    if (existing) {
+        if (typeof showToast === 'function') showToast('Spectacle Production déjà lié', 'info');
+        if (typeof viewSpectacle === 'function') viewSpectacle(existing.id);
+        return existing;
+    }
+    var prospect = null;
+    var prospectIds = typeof getCrmDealProspectIds === 'function' ? getCrmDealProspectIds(deal) : (deal.prospectId ? [deal.prospectId] : []);
+    if (typeof findCrmProspect === 'function' && prospectIds.length) {
+        var found = findCrmProspect(prospectIds[0]);
+        if (found) prospect = found.prospect;
+    }
+    var defaultName = deal.title || (prospect && (prospect.organisme || ((prospect.contactPrenom || '') + ' ' + (prospect.contactNom || '')).trim())) || 'Nouveau spectacle';
+    var name = window.prompt('Nom du spectacle Production :', defaultName);
+    if (!name || !name.trim()) return null;
+    var dateHint = window.prompt('Date (AAAA-MM-JJ, optionnel) :', '');
+    var spectacleId = 'spectacle_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    var spectacle = {
+        id: spectacleId,
+        type: 'spectacle',
+        name: name.trim(),
+        location: (prospect && (prospect.ville || prospect.adresse)) || '',
+        date: (dateHint || '').trim() || '',
+        time: '',
+        capacite: 0,
+        billetterie: [],
+        budget: [],
+        visuels: [],
+        documents: [],
+        communications: [],
+        tasks: [],
+        technique: { lieu: null, prestataires: [], voyages: [], hebergements: [], planning: [] },
+        crmDealId: deal.id,
+        clientId: prospect ? ('crm_' + prospect.id) : null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    if (typeof projects === 'undefined' || !Array.isArray(projects)) {
+        if (typeof showToast === 'function') showToast('Module Production indisponible', 'error');
+        return null;
+    }
+    projects.push(spectacle);
+    deal.productionProjectId = spectacleId;
+    deal.updatedAt = new Date().toISOString();
+    try {
+        if (typeof saveCrmData === 'function') await saveCrmData();
+    } catch (e) { console.warn(e); }
+    try {
+        if (typeof saveProjectsAsync === 'function') saveProjectsAsync();
+        else if (typeof saveProjects === 'function') await saveProjects();
+    } catch (e2) { console.warn(e2); }
+    if (typeof showToast === 'function') showToast('Spectacle Production créé et lié au dossier', 'success');
+    if (typeof closeAllPages === 'function') closeAllPages();
+    if (typeof viewSpectacle === 'function') viewSpectacle(spectacleId);
+    return spectacle;
+}
+window.createProductionSpectacleFromCrmDeal = createProductionSpectacleFromCrmDeal;
+
+function createCrmDealProduction() {
+    if (!crmV2DealId) return;
+    createProductionSpectacleFromCrmDeal(crmV2DealId);
+}
+window.createCrmDealProduction = createCrmDealProduction;
 
 function saveCrmDealFicheFollowUp() {
     var deal = getCrmDealById(crmV2DealId);
@@ -4966,11 +5073,22 @@ function openCrmDealModalInternal(dealId, prospectId, options) {
     }
 
     document.getElementById('crmDealDeleteBtn').style.display = deal ? '' : 'none';
+    var showWon = deal && (deal.status === 'won' || (deal.stage && /gagn|won|sign/i.test(deal.stage)));
     var wpBtn = document.getElementById('crmDealCreateWpBtn');
     if (wpBtn) {
-        var showWp = deal && (deal.status === 'won' || (deal.stage && /gagn|won|sign/i.test(deal.stage)));
-        wpBtn.style.display = showWp && typeof createWorkProjectFromCrmDeal === 'function' ? '' : 'none';
-        if (showWp) wpBtn.onclick = function() { createWorkProjectFromCrmDeal(deal.id); closeCrmDealModal(); };
+        var hasWp = deal && typeof getWorkProjectForCrmDeal === 'function' && getWorkProjectForCrmDeal(deal.id);
+        wpBtn.style.display = (showWon && !hasWp && typeof createWorkProjectFromCrmDeal === 'function') ? '' : 'none';
+        if (showWon && !hasWp) wpBtn.onclick = function() { createWorkProjectFromCrmDeal(deal.id); closeCrmDealModal(); };
+    }
+    var prodBtn = document.getElementById('crmDealCreateProdBtn');
+    if (prodBtn) {
+        var hasProd = deal && getProductionProjectForCrmDeal(deal.id);
+        prodBtn.style.display = (showWon && !hasProd) ? '' : 'none';
+        if (showWon && !hasProd) {
+            prodBtn.onclick = function() {
+                createProductionSpectacleFromCrmDeal(deal.id).then(function() { closeCrmDealModal(); });
+            };
+        }
     }
     document.getElementById('crmDealModal').classList.add('active');
 }

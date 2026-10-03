@@ -271,7 +271,7 @@ function formatLiensLabels(liens) {
     });
     (liens.workProjectIds || []).forEach(function(id) {
         var p = typeof getWorkProjectById === 'function' ? getWorkProjectById(id) : null;
-        parts.push('Projet : ' + (p ? (p.title || p.name || id) : id));
+        parts.push('Espace : ' + (p ? (p.title || p.name || id) : id));
     });
     (liens.projetIds || []).forEach(function(id) {
         var label = id;
@@ -283,7 +283,7 @@ function formatLiensLabels(liens) {
                 });
             });
         }
-        parts.push('Spectacle : ' + label);
+        parts.push('Production : ' + label);
     });
     return parts;
 }

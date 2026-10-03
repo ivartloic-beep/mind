@@ -24,19 +24,48 @@ function getActiveHomeBureauTasksNorm() {
         : function(s, c) { return c || s === 'done' ? 'done' : 'todo'; };
 }
 
+function getHomeTaskDueDay(task) {
+    if (!task || !task.dueDate) return null;
+    const d = new Date(task.dueDate);
+    if (Number.isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+}
+
+function sortHomeTodayTasks(tasks) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+    return (tasks || []).slice().sort(function(a, b) {
+        const da = getHomeTaskDueDay(a);
+        const db = getHomeTaskDueDay(b);
+        const rank = function(ms) {
+            if (ms == null) return 3;
+            if (ms < todayMs) return 0; // en retard
+            if (ms === todayMs) return 1; // aujourd'hui
+            return 2;
+        };
+        const ra = rank(da);
+        const rb = rank(db);
+        if (ra !== rb) return ra - rb;
+        if (da != null && db != null && da !== db) return da - db;
+        return String(a.title || '').localeCompare(String(b.title || ''), 'fr');
+    });
+}
+
 function getActiveHomeBureauTasks() {
     const norm = getActiveHomeBureauTasksNorm();
+    let list = [];
     if (typeof collectBureauUnifiedTasks === 'function') {
-        return collectBureauUnifiedTasks('for_me').filter(function(t) {
+        list = collectBureauUnifiedTasks('for_me').filter(function(t) {
             return norm(t.status, t.completed) !== 'done';
         });
-    }
-    if (typeof getMyTasks === 'function' && currentUser) {
-        return getMyTasks().filter(function(t) {
+    } else if (typeof getMyTasks === 'function' && currentUser) {
+        list = getMyTasks().filter(function(t) {
             return !t.completed && !String(t.status || '').includes('done');
         });
     }
-    return [];
+    return sortHomeTodayTasks(list);
 }
 
 function setHomeTasksCount(count) {
@@ -163,18 +192,26 @@ async function renderHomeTasksList(options) {
     try {
         if (!options.skipReload) await ensureHomeTasksSourcesLoaded();
 
-        const unified = options.knownTasks || getActiveHomeBureauTasks();
+        const unified = sortHomeTodayTasks(options.knownTasks || getActiveHomeBureauTasks());
         setHomeTasksCount(unified.length);
 
         if (typeof renderBureauUnifiedTasksListHtml === 'function') {
             if (unified.length) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const todayMs = today.getTime();
+                const dueTodayOrLate = unified.filter(function(t) {
+                    const ms = getHomeTaskDueDay(t);
+                    return ms != null && ms <= todayMs;
+                });
+                const preferred = dueTodayOrLate.length ? dueTodayOrLate : unified;
                 const limit = HOME_WIDGET_ITEMS_LIMIT;
-                const slice = unified.slice(0, limit);
+                const slice = preferred.slice(0, limit);
                 container.innerHTML =
                     '<div class="home-bureau-unified-tasks">' +
                     renderBureauUnifiedTasksListHtml(slice, { hideDelete: true, compact: true }) +
-                    (unified.length > limit
-                        ? '<div class="home-widget-more">+ ' + (unified.length - limit) + ' autres dans Mon Bureau</div>'
+                    (preferred.length > limit
+                        ? '<div class="home-widget-more">+ ' + (preferred.length - limit) + ' autres</div>'
                         : '') +
                     '</div>';
                 return;

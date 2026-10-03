@@ -32,6 +32,7 @@
         
         /* Espaces par société */
         .home-space { margin-bottom: 2rem; text-align: left; }
+        .home-today { margin-top: 1.5rem; text-align: left; }
         .home-space-title {
             font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
             color: var(--mn-text-secondary); margin-bottom: 0.75rem; padding-left: 0.25rem;

@@ -2783,36 +2783,53 @@ function populateClientSelect(selectId) {
 
 function getAllClientsForSelect() {
     const result = [];
-    
-    // 1. Clients dédiés (appSettings.clients)
+    const seenLabels = new Set();
+    const pushUnique = (item) => {
+        const key = (item.label || '').trim().toLowerCase();
+        if (!key || seenLabels.has(key)) return;
+        seenLabels.add(key);
+        result.push(item);
+    };
+
+    // 1. CRM = source de vérité (crmData puis appSettings.crm)
+    const crmLists = (typeof crmData !== 'undefined' && crmData && Array.isArray(crmData.lists))
+        ? crmData.lists
+        : ((appSettings.crm && appSettings.crm.lists) || []);
+    crmLists.forEach(list => {
+        (list.prospects || []).forEach(p => {
+            const org = (p.organisme || '').trim();
+            const contact = ((p.contactPrenom || '') + ' ' + (p.contactNom || '')).trim();
+            pushUnique({
+                id: 'crm_' + p.id,
+                label: (org || contact || 'Prospect') + (org && contact ? ' (' + contact + ')' : ''),
+                source: 'crm',
+                data: p
+            });
+        });
+    });
+    const structures = (typeof crmData !== 'undefined' && crmData && Array.isArray(crmData.structures))
+        ? crmData.structures
+        : ((appSettings.crm && appSettings.crm.structures) || []);
+    structures.forEach(s => {
+        pushUnique({
+            id: 'crm_struct_' + s.id,
+            label: (s.name || s.nom || 'Structure') + ' · structure',
+            source: 'crm_structure',
+            data: s
+        });
+    });
+
+    // 2. Anciens clients locaux (lecture seule / migration douce)
     (appSettings.clients || []).forEach(c => {
-        result.push({
+        pushUnique({
             id: 'client_' + c.id,
-            label: c.nom + (c.contact ? ' (' + c.contact + ')' : ''),
+            label: (c.nom || 'Client') + (c.contact ? ' (' + c.contact + ')' : '') + ' · ancien',
             source: 'clients',
             data: c
         });
     });
-    
-    // 2. Prospects CRM (toutes les listes)
-    if (appSettings.crm && appSettings.crm.lists) {
-        appSettings.crm.lists.forEach(list => {
-            (list.prospects || []).forEach(p => {
-                // Éviter les doublons (même organisme)
-                if (!result.find(r => r.label === p.organisme)) {
-                    result.push({
-                        id: 'crm_' + p.id,
-                        label: p.organisme + (p.contactPrenom || p.contactNom ? ' (' + (p.contactPrenom || '') + ' ' + (p.contactNom || '') + ')' : ''),
-                        source: 'crm',
-                        data: p
-                    });
-                }
-            });
-        });
-    }
-    
-    // Trier par label
-    result.sort((a, b) => a.label.localeCompare(b.label));
+
+    result.sort((a, b) => a.label.localeCompare(b.label, 'fr'));
     return result;
 }
 
@@ -2823,14 +2840,27 @@ function getClientById(clientId) {
         const id = clientId.replace('client_', '');
         return (appSettings.clients || []).find(c => c.id === id);
     }
+
+    if (clientId.startsWith('crm_struct_')) {
+        const id = clientId.replace('crm_struct_', '');
+        const structures = (typeof crmData !== 'undefined' && crmData && crmData.structures)
+            ? crmData.structures
+            : ((appSettings.crm && appSettings.crm.structures) || []);
+        return (structures || []).find(s => s.id === id) || null;
+    }
     
     if (clientId.startsWith('crm_')) {
         const id = clientId.replace('crm_', '');
-        if (appSettings.crm && appSettings.crm.lists) {
-            for (const list of appSettings.crm.lists) {
-                const prospect = (list.prospects || []).find(p => p.id === id);
-                if (prospect) return prospect;
-            }
+        if (typeof findCrmProspect === 'function') {
+            const found = findCrmProspect(id);
+            if (found && found.prospect) return found.prospect;
+        }
+        const lists = (typeof crmData !== 'undefined' && crmData && crmData.lists)
+            ? crmData.lists
+            : ((appSettings.crm && appSettings.crm.lists) || []);
+        for (const list of lists) {
+            const prospect = (list.prospects || []).find(p => p.id === id);
+            if (prospect) return prospect;
         }
     }
     
@@ -2841,7 +2871,7 @@ function getClientDisplayName(clientId) {
     if (!clientId) return 'Non défini';
     const client = getClientById(clientId);
     if (!client) return 'Client inconnu';
-    return client.organisme || client.nom || 'Client';
+    return client.organisme || client.name || client.nom || 'Client';
 }
 
 // Quick Client Modal
@@ -2863,34 +2893,83 @@ async function saveQuickClient(e) {
     e.preventDefault();
     const nom = document.getElementById('quickClientNom').value.trim();
     if (!nom) return;
-    
-    if (!appSettings.clients) appSettings.clients = [];
-    
-    const newClient = {
-        id: 'cl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        nom: nom,
-        contact: document.getElementById('quickClientContact').value.trim(),
-        telephone: document.getElementById('quickClientTelephone').value.trim(),
-        email: document.getElementById('quickClientEmail').value.trim(),
-        adresse: document.getElementById('quickClientAdresse').value.trim(),
-        notes: document.getElementById('quickClientNotes').value.trim(),
-        createdAt: new Date().toISOString()
-    };
-    
-    appSettings.clients.push(newClient);
-    
-    // Sauvegarder
+
+    const contact = document.getElementById('quickClientContact').value.trim();
+    const telephone = document.getElementById('quickClientTelephone').value.trim();
+    const email = document.getElementById('quickClientEmail').value.trim();
+    const adresse = document.getElementById('quickClientAdresse').value.trim();
+    const notes = document.getElementById('quickClientNotes').value.trim();
+
+    // Créer un prospect CRM (source de vérité) plutôt qu'un client parallèle
+    let newVal = null;
     try {
-        if (typeof saveSettings === 'function') await saveSettings();
-    } catch(err) {
-        console.error('Erreur sauvegarde client:', err);
+        if (typeof ensureCrmDataLoaded === 'function') await ensureCrmDataLoaded();
+        const lists = (typeof crmData !== 'undefined' && crmData && Array.isArray(crmData.lists))
+            ? crmData.lists.filter(function(l) {
+                return typeof hasCrmListAccess !== 'function' || hasCrmListAccess(l);
+            })
+            : [];
+        let targetList = lists[0];
+        if (!targetList) {
+            if (typeof crmData === 'undefined') window.crmData = { lists: [], deals: [], structures: [] };
+            if (!crmData.lists) crmData.lists = [];
+            targetList = {
+                id: 'list_mind_' + Date.now().toString(36),
+                name: 'Contacts',
+                prospects: [],
+                createdAt: new Date().toISOString()
+            };
+            crmData.lists.push(targetList);
+        }
+        if (!Array.isArray(targetList.prospects)) targetList.prospects = [];
+        const parts = contact ? contact.split(/\s+/) : [];
+        const prospect = {
+            id: 'prosp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            contactPrenom: parts[0] || '',
+            contactNom: parts.slice(1).join(' ') || '',
+            organisme: nom,
+            email: email,
+            tel: telephone,
+            telFixe: '',
+            telMobile: telephone,
+            adresse: adresse,
+            notes: notes,
+            tags: {},
+            activities: [],
+            listIds: [targetList.id],
+            createdAt: new Date().toISOString(),
+            followUpDate: null,
+            followUpNote: ''
+        };
+        targetList.prospects.push(prospect);
+        if (typeof appSettings !== 'undefined') appSettings.crm = crmData;
+        if (typeof saveCrmData === 'function') await saveCrmData();
+        newVal = 'crm_' + prospect.id;
+        if (typeof showToast === 'function') showToast('Contact créé dans le CRM', 'success');
+    } catch (err) {
+        console.error('Erreur création prospect CRM:', err);
+        if (!appSettings.clients) appSettings.clients = [];
+        const newClient = {
+            id: 'cl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            nom: nom,
+            contact: contact,
+            telephone: telephone,
+            email: email,
+            adresse: adresse,
+            notes: notes,
+            createdAt: new Date().toISOString()
+        };
+        appSettings.clients.push(newClient);
+        try {
+            if (typeof saveSettings === 'function') await saveSettings();
+        } catch (e2) { /* ignore */ }
+        newVal = 'client_' + newClient.id;
+        if (typeof showToast === 'function') showToast('Contact enregistré (local)', 'warning');
     }
-    
+
     closeQuickClientModal();
-    
-    // Rafraîchir les sélecteurs de clients
-    const newVal = 'client_' + newClient.id;
-    
+    if (!newVal) return;
+
     if (window._quickClientReturnToEditVente) {
         populateClientSelect('editVenteClientId');
         document.getElementById('editVenteClientId').value = newVal;

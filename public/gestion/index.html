@@ -211,11 +211,13 @@
                                 <span class="home-tile-desc">NDF, devis et factures</span>
                             </div>
                         </div>
+                        <div class="home-today" id="homeTodaySection">
+                        <h3 class="home-space-title">Aujourd’hui</h3>
                         <div class="home-widgets-grid">
                         <!-- Widget Mes tâches à faire -->
                         <div class="home-widget home-tasks-widget" id="homeTasksWidget">
                             <div class="home-widget-header">
-                                <h3>Mes tâches à faire</h3>
+                                <h3>Tâches à traiter</h3>
                                 <button type="button" class="btn btn-link" onclick="openMyBureauTasks()">Voir tout</button>
                             </div>
                             <div id="homeTasksList" class="home-tasks-list"></div>
@@ -223,10 +225,11 @@
                         <!-- Widget Prochaines relances CRM -->
                         <div class="home-widget home-relances-widget" id="homeRelancesWidget" style="display:none;">
                             <div class="home-widget-header">
-                                <h3>Prochaines relances</h3>
+                                <h3>Relances du jour</h3>
                                 <button type="button" class="btn btn-link" onclick="openCrmRelancesBrowsePageFromAppHome()">Voir tout</button>
                             </div>
                             <div id="homeRelancesList" class="home-relances-grid"></div>
+                        </div>
                         </div>
                         </div>
                     </div>
@@ -1862,7 +1865,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="form-group" id="wpFormTemplateGroup"><label>Modèle (nouveau projet)</label><select id="wpFormTemplate" style="width:100%;padding:0.6rem;"></select></div>
+                <div class="form-group" id="wpFormTemplateGroup">
+                    <label>Modèle (checklist au démarrage)</label>
+                    <select id="wpFormTemplate" style="width:100%;padding:0.6rem;" onchange="updateWpFormTemplateHint()"></select>
+                    <p class="wp-form-hint" id="wpFormTemplateHint">Choisissez un modèle Admin pour préremplir les tâches types.</p>
+                </div>
                 <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="closeWorkProjectModal()">Annuler</button><button type="submit" class="btn">Enregistrer</button></div>
             </form>
         </div>
@@ -4488,19 +4495,19 @@
     <script src="js/modules/admin.js?v=20260731-01"></script>
 <script src="js/modules/invitation-ticket-layout.js?v=20260402-15"></script>
 <script src="js/modules/evenementiel.js?v=20260703-63"></script>
-<script src="js/modules/spectacles.js?v=20260707-11"></script>
+<script src="js/modules/spectacles.js?v=20261003-p2"></script>
     <script src="js/modules/bureau.js?v=20260709-05"></script>
     <script src="js/modules/crm.js?v=20260707-18"></script>
-    <script src="js/modules/crm-v2.js?v=20260731-01"></script>
+    <script src="js/modules/crm-v2.js?v=20261003-p2"></script>
     <script src="js/modules/taches.js?v=20260709-05"></script>
-    <script src="js/modules/work-projects.js?v=20260731-01"></script>
+    <script src="js/modules/work-projects.js?v=20261003-p2"></script>
     <script src="js/modules/tasks-unified.js?v=20260703-18"></script>
     <script src="js/modules/compta.js?v=20260731-01"></script>
-    <script src="js/modules/compta-docs.js?v=20260731-01"></script>
+    <script src="js/modules/compta-docs.js?v=20261003-p2"></script>
     <script src="js/modules/notes-frais.js?v=20260706-08"></script>
     <script src="js/modules/compta-validation.js?v=20260731-01"></script>
-    <script src="js/modules/comptabilite-home.js?v=20260731-01"></script>
-    <script src="js/modules/home.js?v=20260709-05"></script>
+    <script src="js/modules/comptabilite-home.js?v=20261003-p2"></script>
+    <script src="js/modules/home.js?v=20261003-p2"></script>
     <script src="js/modules/messagerie.js?v=20260707-13"></script>
     <script src="js/modules/mails.js?v=20260731-01"></script>
     <script src="js/modules/task-fiche.js?v=20260709-04"></script>
@@ -5043,8 +5050,10 @@
                     <div id="crmDealHeroSubtitle" class="crm-prospect-hero-role"></div>
                     <div id="crmDealHeroMeta" class="crm-prospect-hero-meta"></div>
                     <div class="crm-prospect-hero-actions" id="crmDealHeroActions">
-                        <button type="button" class="btn btn-secondary" id="crmDealFicheWpBtn" style="display:none;" onclick="openCrmDealWorkProject()">📁 Espace projet</button>
-                        <button type="button" class="btn btn-secondary" id="crmDealFicheCreateWpBtn" style="display:none;" onclick="createCrmDealWorkProject()">+ Créer espace projet</button>
+                        <button type="button" class="btn btn-secondary" id="crmDealFicheWpBtn" style="display:none;" onclick="openCrmDealWorkProject()">📁 Espace</button>
+                        <button type="button" class="btn btn-secondary" id="crmDealFicheCreateWpBtn" style="display:none;" onclick="createCrmDealWorkProject()">+ Créer espace</button>
+                        <button type="button" class="btn btn-secondary" id="crmDealFicheProdBtn" style="display:none;" onclick="openCrmDealProduction()">🎭 Production</button>
+                        <button type="button" class="btn" id="crmDealFicheCreateProdBtn" style="display:none;" onclick="createCrmDealProduction()">+ Créer spectacle</button>
                     </div>
                     <div class="crm-deal-fiche-search-wrap crm-deal-fiche-search-wrap--hero">
                         <div class="crm-search-bar crm-deal-fiche-search">
@@ -5294,7 +5303,8 @@
                 </div>
                 <div class="form-group"><label>Projet lié</label><select id="crmDealWorkProject" style="width:100%;padding:0.6rem;border:1px solid #e2e8f0;border-radius:10px;"></select></div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" id="crmDealCreateWpBtn" style="display:none;">📁 Créer espace projet</button>
+                    <button type="button" class="btn btn-secondary" id="crmDealCreateWpBtn" style="display:none;">📁 Créer espace</button>
+                    <button type="button" class="btn btn-secondary" id="crmDealCreateProdBtn" style="display:none;">🎭 Créer spectacle</button>
                     <button type="button" class="btn btn-secondary" id="crmDealDeleteBtn" style="display:none;color:#e53e3e;" onclick="deleteCrmDeal()">Supprimer</button>
                     <button type="button" class="btn btn-secondary" onclick="closeCrmDealModal()">Annuler</button>
                     <button type="submit" class="btn">Enregistrer</button>
@@ -6483,14 +6493,14 @@
                 <label>Commentaire (optionnel)</label>
                 <textarea id="depotFactureCommentaire" rows="2" placeholder="Informations utiles pour la comptabilité"></textarea>
             </div>
-            <details style="margin-bottom:1rem;">
-                <summary style="cursor:pointer;color:#64748b;font-size:0.9rem;">Lier à un dossier / projet (optionnel)</summary>
-                <div style="display:grid;grid-template-columns:1fr;gap:0.75rem;margin-top:0.75rem;">
+            <fieldset class="compta-lie-a" style="margin-bottom:1rem;border:1px solid #e2e8f0;border-radius:12px;padding:0.85rem 1rem;">
+                <legend style="padding:0 0.35rem;color:#334155;font-size:0.9rem;font-weight:600;">Lié à</legend>
+                <div style="display:grid;grid-template-columns:1fr;gap:0.75rem;">
                     <div class="form-group" style="margin:0;"><label>Dossier CRM</label><select id="depotFactureDealId" style="width:100%;"></select></div>
-                    <div class="form-group" style="margin:0;"><label>Espace projet</label><select id="depotFactureWorkProjectId" style="width:100%;"></select></div>
-                    <div class="form-group" style="margin:0;"><label>Spectacle / tournée</label><select id="depotFactureProjetId" style="width:100%;"></select></div>
+                    <div class="form-group" style="margin:0;"><label>Espace</label><select id="depotFactureWorkProjectId" style="width:100%;"></select></div>
+                    <div class="form-group" style="margin:0;"><label>Production (spectacle / tournée)</label><select id="depotFactureProjetId" style="width:100%;"></select></div>
                 </div>
-            </details>
+            </fieldset>
             <div class="form-group">
                 <label>Facture (PDF ou image) *</label>
                 <div class="compta-dropzone" id="depotFactureDropzone" onclick="document.getElementById('depotFactureFileInput').click()" style="padding: 1.25rem;">
@@ -6525,14 +6535,14 @@
                 <div class="form-group"><label>Montant TTC</label><input type="number" id="depotDevisMontant" step="0.01" min="0" placeholder="0,00"></div>
             </div>
             <div class="form-group"><label>Commentaire</label><textarea id="depotDevisCommentaire" rows="2"></textarea></div>
-            <details style="margin-bottom:1rem;">
-                <summary style="cursor:pointer;color:#64748b;font-size:0.9rem;">Lier à un dossier / projet (optionnel)</summary>
-                <div style="display:grid;grid-template-columns:1fr;gap:0.75rem;margin-top:0.75rem;">
+            <fieldset class="compta-lie-a" style="margin-bottom:1rem;border:1px solid #e2e8f0;border-radius:12px;padding:0.85rem 1rem;">
+                <legend style="padding:0 0.35rem;color:#334155;font-size:0.9rem;font-weight:600;">Lié à</legend>
+                <div style="display:grid;grid-template-columns:1fr;gap:0.75rem;">
                     <div class="form-group" style="margin:0;"><label>Dossier CRM</label><select id="depotDevisDealId" style="width:100%;"></select></div>
-                    <div class="form-group" style="margin:0;"><label>Espace projet</label><select id="depotDevisWorkProjectId" style="width:100%;"></select></div>
-                    <div class="form-group" style="margin:0;"><label>Spectacle / tournée</label><select id="depotDevisProjetId" style="width:100%;"></select></div>
+                    <div class="form-group" style="margin:0;"><label>Espace</label><select id="depotDevisWorkProjectId" style="width:100%;"></select></div>
+                    <div class="form-group" style="margin:0;"><label>Production (spectacle / tournée)</label><select id="depotDevisProjetId" style="width:100%;"></select></div>
                 </div>
-            </details>
+            </fieldset>
             <div class="form-group">
                 <label>Devis (PDF ou image) *</label>
                 <div class="compta-dropzone" onclick="document.getElementById('depotDevisFileInput').click()" style="padding:1.25rem;">
@@ -6575,9 +6585,12 @@
                 <div class="form-group"><label>Validité</label><input type="date" id="depotDevisEditDateValidite"></div>
             </div>
             <div class="form-group"><label>Commentaire</label><textarea id="depotDevisEditCommentaire" rows="2"></textarea></div>
-            <div class="form-group"><label>Dossier CRM</label><select id="depotDevisEditDealId" style="width:100%;"></select></div>
-            <div class="form-group"><label>Espace projet</label><select id="depotDevisEditWorkProjectId" style="width:100%;"></select></div>
-            <div class="form-group"><label>Spectacle / tournée</label><select id="depotDevisEditProjetId" style="width:100%;"></select></div>
+            <fieldset class="compta-lie-a" style="margin-bottom:1rem;border:1px solid #e2e8f0;border-radius:12px;padding:0.85rem 1rem;">
+                <legend style="padding:0 0.35rem;color:#334155;font-size:0.9rem;font-weight:600;">Lié à</legend>
+                <div class="form-group"><label>Dossier CRM</label><select id="depotDevisEditDealId" style="width:100%;"></select></div>
+                <div class="form-group"><label>Espace</label><select id="depotDevisEditWorkProjectId" style="width:100%;"></select></div>
+                <div class="form-group"><label>Production (spectacle / tournée)</label><select id="depotDevisEditProjetId" style="width:100%;"></select></div>
+            </fieldset>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeDepotDevisEditModal()">Annuler</button>
                 <button type="button" class="btn" onclick="saveDepotDevisEdit()">Enregistrer</button>
@@ -6607,14 +6620,14 @@
             </div>
             <div class="form-group"><label>Statut</label><select id="comptaDocEmisStatut"></select></div>
             <div class="form-group"><label>Commentaire</label><textarea id="comptaDocEmisCommentaire" rows="2"></textarea></div>
-            <details style="margin-bottom:1rem;">
-                <summary style="cursor:pointer;color:#64748b;font-size:0.9rem;">Lier à un dossier / projet (optionnel)</summary>
-                <div style="display:grid;gap:0.75rem;margin-top:0.75rem;">
+            <fieldset class="compta-lie-a" style="margin-bottom:1rem;border:1px solid #e2e8f0;border-radius:12px;padding:0.85rem 1rem;">
+                <legend style="padding:0 0.35rem;color:#334155;font-size:0.9rem;font-weight:600;">Lié à</legend>
+                <div style="display:grid;gap:0.75rem;">
                     <div class="form-group" style="margin:0;"><label>Dossier CRM</label><select id="comptaDocEmisDealId" style="width:100%;"></select></div>
-                    <div class="form-group" style="margin:0;"><label>Espace projet</label><select id="comptaDocEmisWorkProjectId" style="width:100%;"></select></div>
-                    <div class="form-group" style="margin:0;"><label>Spectacle / tournée</label><select id="comptaDocEmisProjetId" style="width:100%;"></select></div>
+                    <div class="form-group" style="margin:0;"><label>Espace</label><select id="comptaDocEmisWorkProjectId" style="width:100%;"></select></div>
+                    <div class="form-group" style="margin:0;"><label>Production (spectacle / tournée)</label><select id="comptaDocEmisProjetId" style="width:100%;"></select></div>
                 </div>
-            </details>
+            </fieldset>
             <div class="form-group">
                 <label>Fichier *</label>
                 <div class="compta-dropzone" onclick="document.getElementById('comptaDocEmisFileInput').click()" style="padding:1.25rem;">
