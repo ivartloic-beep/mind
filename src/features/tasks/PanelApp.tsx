@@ -131,6 +131,7 @@ export function PanelApp() {
     null,
   );
   const [gestionSyncBusy, setGestionSyncBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [, startTransition] = useTransition();
   const gestionLoggedInRef = useRef(false);
   const dayQueue = pickDayQueue(tasks, 4);
@@ -435,8 +436,14 @@ export function PanelApp() {
   }
 
   async function removeTask(task: Task) {
-    const ok = window.confirm(`Supprimer la tâche « ${task.title} » ?`);
-    if (!ok) return;
+    // confirm() natif est souvent coupé dans la fenêtre panneau étroite
+    setDeleteTarget(task);
+  }
+
+  async function confirmDeleteTask() {
+    const task = deleteTarget;
+    if (!task) return;
+    setDeleteTarget(null);
     setPendingId(task.id);
     try {
       await deleteTask(task.id);
@@ -1247,6 +1254,39 @@ export function PanelApp() {
           </>
         )}
       </div>
+
+      {deleteTarget && (
+        <div
+          className="panel-confirm-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="panel-confirm-title"
+        >
+          <div className="panel-confirm-card">
+            <p id="panel-confirm-title" className="panel-confirm-title">
+              Supprimer la tâche « {deleteTarget.title} » ?
+            </p>
+            <div className="panel-confirm-actions">
+              <button
+                type="button"
+                className="panel-confirm-btn is-danger"
+                disabled={pendingId === deleteTarget.id}
+                onClick={() => void confirmDeleteTask()}
+              >
+                Supprimer
+              </button>
+              <button
+                type="button"
+                className="panel-confirm-btn"
+                disabled={pendingId === deleteTarget.id}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
