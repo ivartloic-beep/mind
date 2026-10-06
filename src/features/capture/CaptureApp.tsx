@@ -12,7 +12,7 @@ import {
   listProjects,
   upsertProject,
 } from "../../services/api";
-import { captureHide } from "../../services/capture";
+import { captureHide, captureOpenCrm } from "../../services/capture";
 import type { Project, TaskPriority, TaskStatus } from "../../types/models";
 import { ProjectSelect } from "../projects/ProjectSelect";
 import "./capture.css";
@@ -409,6 +409,16 @@ export function CaptureApp() {
               {label}
             </button>
           ))}
+          <button
+            type="button"
+            className="capture-kind"
+            title="Contact CRM dans le panneau — Gmail reste visible"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void captureOpenCrm()}
+          >
+            CRM
+          </button>
         </div>
         <button
           type="button"

@@ -25,6 +25,7 @@ Nom provisoire : **Ma Tête**.
 - **Phase 1 Gestion** : shell Windows embarque le front `gestion-v2` (`public/gestion/`), sans messagerie/mails, Événementiel → Production.
 - **Phase 2 Tâches** : modèle Task = `personal_tasks` (gestion). Avec session Gestion (Paramètres → login), capture/panneau/bibliothèque CRUD via l’API PHP ; sinon SQLite local élargi. Import one-shot des tâches locales. Voir `docs/ROADMAP-GESTION-WINDOWS.md`.
 - **Sync panneau ↔ Gestion (2 sens)** : tâches ↔ `personal_tasks` ; projets ↔ Production + `work_projects` ; notes/idées ↔ bureau (`workspace.php`). Pull au focus / fermeture Gestion / toutes les 20s + bouton « Synchroniser maintenant ».
+- **CRM « Analyser l’écran » (V1)** : Capture ou panneau Capturer → **CRM** → bouton dans le panneau droit. Screenshot du moniteur (HWND MIND masqués sur le bitmap, pas de flash) → OCR Windows local → Nom / Organisme / Tél / Email éditables → **Créer**. Rien sans validation. Voir `docs/proposition-analyse-ecran-capture.md`.
 
 V1 desktop + polish UX. Test réel Windows recommandé via installateur **NSIS**.
 

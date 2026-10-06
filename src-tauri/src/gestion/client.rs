@@ -1279,7 +1279,8 @@ impl GestionClient {
         &self,
         contact_name: &str,
         organisme: Option<&str>,
-        phone_or_email: Option<&str>,
+        phone: Option<&str>,
+        email: Option<&str>,
     ) -> Result<String, String> {
         let name = contact_name.trim();
         if name.is_empty() {
@@ -1339,12 +1340,8 @@ impl GestionClient {
                     .insert("prospects".into(), Value::Array(vec![]));
             }
 
-            let contact = phone_or_email.map(str::trim).filter(|s| !s.is_empty());
-            let (email, tel) = match contact {
-                Some(c) if c.contains('@') => (Some(c.to_string()), None),
-                Some(c) => (None, Some(c.to_string())),
-                None => (None, None),
-            };
+            let email = email.map(str::trim).filter(|s| !s.is_empty()).map(|s| s.to_string());
+            let tel = phone.map(str::trim).filter(|s| !s.is_empty()).map(|s| s.to_string());
             let parts: Vec<&str> = name.split_whitespace().collect();
             let (prenom, nom) = if parts.len() >= 2 {
                 (parts[0].to_string(), parts[1..].join(" "))

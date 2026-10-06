@@ -1165,6 +1165,11 @@
   gap: 0.45rem;
 }
 
+.contact-analyze-btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .notes-delete-btn {
   margin-left: auto;
   color: #b42318;

@@ -22,6 +22,7 @@ import { captureShow, captureShowKind } from "../../services/capture";
 import {
   listenDataChanged,
   listenPanelFocusSettings,
+  listenPanelOpenCrm,
   listenPanelStateChanged,
   listenReminderDue,
   listenReminderOpenTask,
@@ -127,6 +128,7 @@ export function PanelApp() {
   const [panelMode, setPanelMode] = useState<PanelMode>("day");
   const [showDropInCapture, setShowDropInCapture] = useState(false);
   const [showContactExpress, setShowContactExpress] = useState(false);
+  const [contactExpressKey, setContactExpressKey] = useState(0);
   const [lastGestionSyncAt, setLastGestionSyncAt] = useState<string | null>(
     null,
   );
@@ -274,6 +276,16 @@ export function PanelApp() {
       setOpen(true);
       storeSetOpen(true);
       setSettingsOpen(true);
+    }).then((fn) => unlistens.push(fn));
+
+    void listenPanelOpenCrm(() => {
+      setSettingsOpen(false);
+      setPanelMode("capture");
+      setShowDropInCapture(false);
+      setShowContactExpress(true);
+      setContactExpressKey((k) => k + 1);
+      setOpen(true);
+      storeSetOpen(true);
     }).then((fn) => unlistens.push(fn));
 
     // Gestion → panneau : sync au focus du panneau + polling.
@@ -1121,6 +1133,7 @@ export function PanelApp() {
                 <h2>Capturer</h2>
                 {showContactExpress ? (
                   <ContactExpress
+                    key={contactExpressKey}
                     loggedIn={gestionLoggedIn}
                     onNeedLogin={() => setSettingsOpen(true)}
                     onClose={() => setShowContactExpress(false)}
@@ -1128,8 +1141,8 @@ export function PanelApp() {
                 ) : (
                   <>
                     <p className="panel-muted">
-                      Tâche / note / idée → Capture. Contact → CRM. Fichier →
-                      dépôt.
+                      Tâche / note / idée → Capture. CRM → contact dans ce
+                      panneau (Gmail reste à gauche). Fichier → dépôt.
                     </p>
                     <div
                       className="panel-capture-grid"
@@ -1169,13 +1182,13 @@ export function PanelApp() {
                       <button
                         type="button"
                         className="panel-action-btn"
-                        title="Créer un contact CRM en 3 champs"
+                        title="Créer un contact CRM — Analyser l’écran ou saisie"
                         onClick={() => {
                           setShowDropInCapture(false);
                           setShowContactExpress(true);
                         }}
                       >
-                        Contact
+                        CRM
                       </button>
                       <button
                         type="button"

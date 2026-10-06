@@ -109,3 +109,13 @@ pub fn capture_hide(app: AppHandle) -> Result<(), String> {
     window.hide().map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// Range la Capture centrale, ouvre le panneau droit sur le formulaire CRM.
+#[tauri::command]
+pub fn capture_open_crm(app: AppHandle) -> Result<(), String> {
+    let _ = capture_hide(app.clone());
+    crate::windows::panel::panel_set_open(app.clone(), true)?;
+    app.emit("panel-open-crm", ())
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

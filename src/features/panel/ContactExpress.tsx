@@ -1,8 +1,10 @@
 /**
- * Feuille courte — crée un prospect CRM Gestion en 3 champs.
+ * Feuille courte — crée un prospect CRM Gestion (nom, organisme, tél, email).
+ * « Analyser l’écran » : OCR local Windows, champs éditables, rien sans Créer.
  */
 
 import { useState } from "react";
+import { analyzeScreenCrm } from "../../services/capture";
 import {
   formatInvokeError,
   gestionCreateProspect,
@@ -20,14 +22,17 @@ type Props = {
 export function ContactExpress({ loggedIn, onNeedLogin, onClose }: Props) {
   const [name, setName] = useState("");
   const [organisme, setOrganisme] = useState("");
-  const [contact, setContact] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   async function submit() {
     const trimmed = name.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed || busy || analyzing) return;
     setBusy(true);
     setError(null);
     try {
@@ -44,13 +49,43 @@ export function ContactExpress({ loggedIn, onNeedLogin, onClose }: Props) {
       const report = await gestionCreateProspect({
         name: trimmed,
         organisme: organisme.trim() || null,
-        contact: contact.trim() || null,
+        phone: phone.trim() || null,
+        email: email.trim() || null,
       });
       setCreatedId(report.prospectId);
     } catch (err) {
       setError(formatInvokeError(err, "Création impossible"));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function analyzeScreen() {
+    if (busy || analyzing) return;
+    setAnalyzing(true);
+    setError(null);
+    setHint(null);
+    try {
+      const result = await analyzeScreenCrm();
+      if (result.name.trim()) setName(result.name.trim());
+      if (result.organisme.trim()) setOrganisme(result.organisme.trim());
+      if (result.phone.trim()) setPhone(result.phone.trim());
+      if (result.email.trim()) setEmail(result.email.trim());
+      const filled = Boolean(
+        result.name.trim() ||
+          result.organisme.trim() ||
+          result.phone.trim() ||
+          result.email.trim(),
+      );
+      if (!filled) {
+        setError("Rien d’exploitable. Clique dans Gmail à gauche, puis réessaie.");
+      } else {
+        setHint("Relis avant de créer — Gmail reste visible à gauche.");
+      }
+    } catch (err) {
+      setError(formatInvokeError(err, "Analyse impossible"));
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -77,13 +112,25 @@ export function ContactExpress({ loggedIn, onNeedLogin, onClose }: Props) {
   return (
     <div className="contact-express">
       <h3 className="contact-express-title">Contact express</h3>
+      <button
+        type="button"
+        className="panel-action-btn contact-analyze-btn"
+        disabled={busy || analyzing}
+        onClick={() => void analyzeScreen()}
+      >
+        {analyzing ? "Analyse…" : "Analyser l’écran"}
+      </button>
+      {analyzing && (
+        <p className="panel-muted">Lecture de l’écran (hors panneau MIND)…</p>
+      )}
+      {hint && !analyzing && <p className="panel-muted">{hint}</p>}
       <label className="panel-field">
         <span>Nom</span>
         <input
           className="panel-input"
           type="text"
           value={name}
-          disabled={busy}
+          disabled={busy || analyzing}
           placeholder="Prénom Nom"
           autoComplete="off"
           onChange={(e) => setName(e.target.value)}
@@ -101,29 +148,41 @@ export function ContactExpress({ loggedIn, onNeedLogin, onClose }: Props) {
           className="panel-input"
           type="text"
           value={organisme}
-          disabled={busy}
+          disabled={busy || analyzing}
           placeholder="Optionnel"
           autoComplete="off"
           onChange={(e) => setOrganisme(e.target.value)}
         />
       </label>
       <label className="panel-field">
-        <span>Tél ou e-mail</span>
+        <span>Tél</span>
         <input
           className="panel-input"
-          type="text"
-          value={contact}
-          disabled={busy}
+          type="tel"
+          value={phone}
+          disabled={busy || analyzing}
           placeholder="Optionnel"
           autoComplete="off"
-          onChange={(e) => setContact(e.target.value)}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </label>
+      <label className="panel-field">
+        <span>Email</span>
+        <input
+          className="panel-input"
+          type="email"
+          value={email}
+          disabled={busy || analyzing}
+          placeholder="Optionnel"
+          autoComplete="off"
+          onChange={(e) => setEmail(e.target.value)}
         />
       </label>
       <div className="contact-express-actions">
         <button
           type="button"
           className="panel-action-btn is-primary"
-          disabled={busy || !name.trim()}
+          disabled={busy || analyzing || !name.trim()}
           onClick={() => void submit()}
         >
           {busy ? "Création…" : "Créer"}
@@ -131,7 +190,7 @@ export function ContactExpress({ loggedIn, onNeedLogin, onClose }: Props) {
         <button
           type="button"
           className="panel-link-btn"
-          disabled={busy}
+          disabled={busy || analyzing}
           onClick={onClose}
         >
           Annuler

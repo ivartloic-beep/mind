@@ -56,16 +56,20 @@ export type GestionProspectReport = {
   prospectId: string;
 };
 
-/** Crée un prospect CRM express (nom + organisme + tél/mail). */
+/** Crée un prospect CRM express (nom + organisme + tél + email). */
 export function gestionCreateProspect(args: {
   name: string;
   organisme?: string | null;
   contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
 }): Promise<GestionProspectReport> {
   return invoke<GestionProspectReport>("gestion_create_prospect", {
     name: args.name,
     organisme: args.organisme ?? null,
     contact: args.contact ?? null,
+    phone: args.phone ?? null,
+    email: args.email ?? null,
   });
 }
 

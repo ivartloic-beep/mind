@@ -76,3 +76,13 @@ export async function listenPanelFocusSettings(
   });
   return unlisten;
 }
+
+/** Capture → panneau : ouvrir le formulaire CRM (Contact express). */
+export async function listenPanelOpenCrm(
+  handler: () => void,
+): Promise<() => void> {
+  const unlisten = await listen("panel-open-crm", () => {
+    handler();
+  });
+  return unlisten;
+}

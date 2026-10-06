@@ -113,6 +113,8 @@ pub fn run() {
             windows::capture::capture_show,
             windows::capture::capture_show_with_kind,
             windows::capture::capture_hide,
+            windows::capture::capture_open_crm,
+            os::screen_analyze::analyze_screen_crm,
             windows::library::library_show,
             windows::gestion::gestion_show,
             windows::gestion::gestion_show_page,

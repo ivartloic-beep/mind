@@ -1239,20 +1239,43 @@ pub async fn gestion_create_prospect(
     name: String,
     organisme: Option<String>,
     contact: Option<String>,
+    phone: Option<String>,
+    email: Option<String>,
 ) -> Result<GestionProspectReport, String> {
     if crate::gestion::try_client(&app).is_none() {
         let _ = gestion_ensure_session(app.clone()).await?;
     }
     let client = crate::gestion::try_client(&app)
         .ok_or_else(|| "Session Gestion absente — ⚙ Paramètres → Se connecter".to_string())?;
+    let (tel, mail) = split_contact_fields(phone, email, contact);
     let id = client
         .create_prospect_express(
             &name,
             organisme.as_deref(),
-            contact.as_deref(),
+            tel.as_deref(),
+            mail.as_deref(),
         )
         .await?;
     Ok(GestionProspectReport { prospect_id: id })
+}
+
+fn split_contact_fields(
+    phone: Option<String>,
+    email: Option<String>,
+    contact: Option<String>,
+) -> (Option<String>, Option<String>) {
+    let mut tel = phone.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let mut mail = email.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    if tel.is_none() && mail.is_none() {
+        if let Some(c) = contact.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+            if c.contains('@') {
+                mail = Some(c);
+            } else {
+                tel = Some(c);
+            }
+        }
+    }
+    (tel, mail)
 }
 
 #[derive(Debug, Clone, Serialize)]

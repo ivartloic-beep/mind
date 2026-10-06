@@ -36,6 +36,8 @@ commands.allow = [
   "capture_show",
   "capture_show_with_kind",
   "capture_hide",
+  "capture_open_crm",
+  "analyze_screen_crm",
   "library_show",
   "gestion_show",
   "gestion_show_page",
